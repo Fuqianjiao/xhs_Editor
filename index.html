@@ -1,0 +1,1801 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>小红书全功能编辑器 - 优化版</title>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<style>
+    :root {
+        --xhs-red: #ff2442;
+        --bg-color-sys: #f0f2f5;
+        --panel-bg: #ffffff;
+        --border-color: #e5e7eb;
+        --text-color-main: #2a2d33;
+        --text-color-sub: #8a8f98;
+        --shadow-soft: 0 18px 40px rgba(20, 27, 45, 0.08);
+        --radius-lg: 24px;
+        --radius-md: 16px;
+    }
+
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        margin: 0;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft Yahei", sans-serif;
+        background:
+            radial-gradient(circle at top left, rgba(255, 36, 66, 0.06), transparent 22%),
+            linear-gradient(180deg, #f7f8fb 0%, #eef2f7 100%);
+        color: var(--text-color-main);
+        min-height: 100vh;
+        overflow: hidden;
+    }
+
+    .sys-shell {
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .sys-header {
+        height: 68px;
+        padding: 0 28px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: rgba(255, 255, 255, 0.86);
+        backdrop-filter: blur(14px);
+        border-bottom: 1px solid rgba(229, 231, 235, 0.8);
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+        z-index: 20;
+    }
+
+    .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 18px;
+        font-weight: 700;
+    }
+
+    .brand-mark {
+        width: 34px;
+        height: 34px;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #ff6a83, #ff2442);
+        color: #fff;
+        font-weight: 800;
+    }
+
+    .brand-sub {
+        color: var(--text-color-sub);
+        font-size: 13px;
+        font-weight: 500;
+    }
+
+    .main-wrapper {
+        flex: 1;
+        display: grid;
+        grid-template-columns: 420px minmax(420px, 1fr) 460px;
+        gap: 18px;
+        padding: 18px;
+        min-height: 0;
+    }
+
+    .panel {
+        min-height: 0;
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid rgba(229, 231, 235, 0.85);
+        border-radius: 28px;
+        box-shadow: var(--shadow-soft);
+        overflow: hidden;
+    }
+
+    .panel-scroll {
+        height: 100%;
+        overflow: auto;
+        padding: 22px;
+    }
+
+    .section-title {
+        margin: 0 0 8px;
+        font-size: 28px;
+        line-height: 1.15;
+    }
+
+    .section-subtitle {
+        margin: 0 0 18px;
+        color: var(--text-color-sub);
+        font-size: 14px;
+        line-height: 1.6;
+    }
+
+    .editor-covers .panel-scroll {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+    }
+
+    .cover-maker-container {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 3 / 4;
+        border-radius: 28px;
+        overflow: hidden;
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.14)),
+            linear-gradient(135deg, #f4f0e2 0%, #ece6d5 100%);
+        box-shadow: 0 24px 42px rgba(93, 76, 45, 0.12);
+        isolation: isolate;
+    }
+
+    .cover-canvas,
+    .cover-overlay,
+    .mask-canvas {
+        position: absolute;
+        inset: 0;
+    }
+
+    .cover-canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+        background:
+            radial-gradient(circle at top right, rgba(218, 255, 105, 0.65), transparent 26%),
+            radial-gradient(circle at bottom left, rgba(147, 242, 226, 0.4), transparent 24%),
+            linear-gradient(145deg, #f7fbef 0%, #eff9e1 42%, #ecf8ff 100%);
+    }
+
+    .mask-canvas {
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 2;
+    }
+
+    .cover-grid {
+        position: absolute;
+        inset: 0;
+        background-image:
+            linear-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 255, 255, 0.16) 1px, transparent 1px);
+        background-size: 28px 28px;
+        opacity: 0.35;
+        pointer-events: none;
+    }
+
+    .cover-toolbar-tag {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        padding: 7px 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.78);
+        color: #69707d;
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        backdrop-filter: blur(12px);
+        pointer-events: none;
+    }
+
+    .draggable-cover-text {
+        position: absolute;
+        top: 120px;
+        left: 44px;
+        max-width: calc(100% - 88px);
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft Yahei", sans-serif;
+        font-size: 58px;
+        line-height: 1.18;
+        font-weight: 500;
+        letter-spacing: -0.04em;
+        color: #101114;
+        cursor: move;
+        user-select: none;
+        white-space: pre-wrap;
+        text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+    }
+
+    .draggable-cover-text.editing {
+        cursor: text;
+        user-select: text;
+    }
+
+    .cover-watermark {
+        position: absolute;
+        left: 20px;
+        right: 20px;
+        bottom: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.84);
+        border: 1px solid rgba(255, 255, 255, 0.65);
+        backdrop-filter: blur(12px);
+    }
+
+    .cover-watermark-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+    }
+
+    .author-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: #f3f4f6;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #e5e7eb;
+        color: #707681;
+        font-size: 14px;
+        font-weight: 700;
+        flex-shrink: 0;
+    }
+
+    .watermark-name {
+        font-size: 14px;
+        color: #4d545f;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    [contenteditable="true"] {
+        outline: none;
+        border-radius: 8px;
+        transition: background-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    [contenteditable="true"]:hover,
+    [contenteditable="true"]:focus {
+        background: rgba(255, 255, 255, 0.24);
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.38) inset;
+    }
+
+    .control-card {
+        background: #f8fafc;
+        border: 1px solid #ecedf2;
+        border-radius: 20px;
+        padding: 16px;
+    }
+
+    .control-title {
+        margin: 0 0 10px;
+        font-size: 15px;
+        font-weight: 700;
+    }
+
+    .control-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 12px;
+    }
+
+    .btn-sys,
+    .range-wrap,
+    .status-pill {
+        border-radius: 999px;
+    }
+
+    .btn-sys {
+        border: 1px solid #d8dde6;
+        background: #fff;
+        color: #2e3440;
+        padding: 10px 16px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
+    }
+
+    .btn-sys:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
+        border-color: #c6ced9;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #1d1f24, #3b3d43);
+        color: #fff;
+        border-color: transparent;
+    }
+
+    .btn-accent {
+        background: linear-gradient(135deg, #ff5e7a, #ff2442);
+        color: #fff;
+        border-color: transparent;
+    }
+
+    .btn-ghost.active {
+        background: #1f2937;
+        color: #fff;
+        border-color: #1f2937;
+    }
+
+    #cover-bg-input {
+        display: none;
+    }
+
+    .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: #fff;
+        border: 1px solid #e6eaf0;
+        color: #6b7280;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #cbd5e1;
+    }
+
+    .status-dot.ready {
+        background: #22c55e;
+    }
+
+    .status-dot.warn {
+        background: #f59e0b;
+    }
+
+    .range-wrap {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: 10px 14px;
+        background: #fff;
+        border: 1px solid #e6eaf0;
+    }
+
+    .range-wrap input {
+        flex: 1;
+    }
+
+    .helper-list {
+        margin: 0;
+        padding-left: 18px;
+        color: #69707d;
+        font-size: 13px;
+        line-height: 1.7;
+    }
+
+    .editor-content .panel-scroll {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .content-title-input {
+        width: 100%;
+        border: none;
+        border-bottom: 1px solid #e6eaf0;
+        font-size: 34px;
+        font-weight: 700;
+        padding: 8px 0 16px;
+        background: transparent;
+        color: #101114;
+    }
+
+    .content-title-input:focus {
+        outline: none;
+        border-bottom-color: #b8bec8;
+    }
+
+    .content-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin: 18px 0 10px;
+        color: var(--text-color-sub);
+        font-size: 14px;
+    }
+
+    .content-body-input {
+        flex: 1;
+        min-height: 340px;
+        padding: 4px 0 0;
+        font-size: 16px;
+        line-height: 1.9;
+        border: none;
+        outline: none;
+        color: #30343b;
+        overflow-y: auto;
+        white-space: pre-wrap;
+    }
+
+    .content-body-input:empty::before {
+        content: attr(data-placeholder);
+        color: #c0c6d0;
+    }
+
+    .preview-manager {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        background: linear-gradient(180deg, #fbfcfe 0%, #f3f6fb 100%);
+    }
+
+    .preview-header {
+        padding: 20px 22px 14px;
+        border-bottom: 1px solid rgba(229, 231, 235, 0.82);
+        background: rgba(255, 255, 255, 0.75);
+        backdrop-filter: blur(10px);
+    }
+
+    .preview-topline {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    .preview-topline h2 {
+        margin: 0;
+        font-size: 22px;
+    }
+
+    .view-switcher {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+
+    .switch-tab {
+        padding: 12px 14px;
+        border-radius: 16px;
+        border: 1px solid #dfe5ef;
+        background: #fff;
+        color: #6b7280;
+        text-align: center;
+        font-weight: 700;
+        cursor: pointer;
+        transition: 0.18s ease;
+    }
+
+    .switch-tab.active {
+        border-color: transparent;
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: #fff;
+        box-shadow: 0 12px 22px rgba(37, 99, 235, 0.22);
+    }
+
+    .preview-stage {
+        flex: 1;
+        min-height: 0;
+        padding: 18px;
+        overflow: auto;
+        display: flex;
+        justify-content: center;
+    }
+
+    .phone-shell {
+        width: 100%;
+        max-width: 382px;
+        padding: 16px 14px 18px;
+        border-radius: 44px;
+        background:
+            linear-gradient(180deg, #1b2736 0%, #31465d 100%);
+        box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.12), 0 20px 40px rgba(17, 24, 39, 0.2);
+    }
+
+    .phone-screen {
+        position: relative;
+        min-height: 760px;
+        border-radius: 34px;
+        overflow: hidden;
+        background: #fff;
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+    }
+
+    .phone-notch {
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 108px;
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(18, 18, 18, 0.9);
+        z-index: 5;
+    }
+
+    .preview-content {
+        display: none;
+        padding-top: 26px;
+    }
+
+    .preview-content.active {
+        display: block;
+    }
+
+    .note-page {
+        min-height: 760px;
+        background: #fff;
+    }
+
+    .note-page-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 22px 18px 14px;
+    }
+
+    .note-page-author {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 700;
+    }
+
+    .follow-btn {
+        padding: 7px 16px;
+        border: 1px solid #ff506a;
+        border-radius: 999px;
+        color: #ff2442;
+        background: #fff;
+        font-weight: 700;
+        font-size: 13px;
+    }
+
+    .note-cover-preview {
+        aspect-ratio: 3 / 4;
+        position: relative;
+        overflow: hidden;
+        background: #f1f5f9;
+    }
+
+    .note-cover-preview img,
+    .discover-cover img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .note-cover-preview .overlay-preview-text,
+    .discover-cover .overlay-preview-text {
+        position: absolute;
+        white-space: pre-wrap;
+        line-height: 1.18;
+        letter-spacing: -0.04em;
+        color: #101114;
+        pointer-events: none;
+    }
+
+    .note-body {
+        padding: 16px 18px 22px;
+    }
+
+    .note-title-preview {
+        margin: 0 0 12px;
+        font-size: 22px;
+        line-height: 1.35;
+    }
+
+    .note-content-preview {
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.85;
+        color: #444b56;
+        white-space: pre-wrap;
+    }
+
+    .note-footer-preview {
+        margin-top: 18px;
+        padding-top: 14px;
+        border-top: 1px solid #eef1f4;
+        color: #9aa1ac;
+        font-size: 13px;
+    }
+
+    .discover-page {
+        min-height: 760px;
+        padding: 20px 14px 22px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    }
+
+    .discover-tabs {
+        display: flex;
+        justify-content: center;
+        gap: 28px;
+        margin-bottom: 16px;
+        color: #9aa1ac;
+        font-weight: 700;
+    }
+
+    .discover-tabs .active {
+        color: #111827;
+    }
+
+    .discover-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .discover-card {
+        background: #fff;
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+    }
+
+    .discover-cover {
+        position: relative;
+        aspect-ratio: 3 / 4;
+        overflow: hidden;
+        background: #eef2f7;
+    }
+
+    .discover-info {
+        padding: 10px 10px 12px;
+    }
+
+    .discover-title {
+        margin: 0 0 8px;
+        font-size: 14px;
+        line-height: 1.35;
+        color: #181d25;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .discover-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        color: #8b93a0;
+        font-size: 12px;
+    }
+
+    .discover-author {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+    }
+
+    .discover-author span:last-child {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .discover-like {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-shrink: 0;
+    }
+
+    .discover-bottom-nav {
+        margin-top: 14px;
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        text-align: center;
+        color: #717784;
+        font-weight: 700;
+    }
+
+    .discover-bottom-nav .active {
+        color: #111827;
+    }
+
+    .heart-icon-p {
+        width: 13px;
+        height: 13px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+    }
+
+    #batch-capture-container {
+        position: absolute;
+        left: -9999px;
+        top: -9999px;
+    }
+
+    .hidden-capture-frame {
+        width: 382px;
+        padding: 16px 14px 18px;
+        border-radius: 44px;
+        background: linear-gradient(180deg, #1b2736 0%, #31465d 100%);
+    }
+
+    .hidden-capture-frame .phone-screen {
+        min-height: auto;
+    }
+
+    @media (max-width: 1460px) {
+        body {
+            overflow: auto;
+        }
+
+        .sys-shell {
+            height: auto;
+            min-height: 100vh;
+        }
+
+        .main-wrapper {
+            grid-template-columns: 1fr;
+        }
+
+        .panel {
+            min-height: 680px;
+        }
+    }
+</style>
+</head>
+<body>
+<div class="sys-shell">
+    <header class="sys-header">
+        <div class="brand">
+            <span class="brand-mark">红</span>
+            <div>
+                <div>小红书编辑器系统</div>
+                <div class="brand-sub">先聚焦第一个核心模块：上传背景图后自动去字，只保留背景质感</div>
+            </div>
+        </div>
+        <button class="btn-sys btn-accent" type="button" onclick="saveSingleCover()">保存当前封面图</button>
+    </header>
+
+    <div class="main-wrapper">
+        <aside class="panel editor-covers">
+            <div class="panel-scroll">
+                <div>
+                    <h1 class="section-title">封面制作</h1>
+                    <p class="section-subtitle">上传背景后会先自动尝试去掉原图文字。当前算法优先处理“浅色海报背景上的深色大字”，如果还有残留，可以直接开启魔法笔刷做局部修复。</p>
+                </div>
+
+                <div class="cover-maker-container" id="cover-maker-card">
+                    <canvas class="cover-canvas" id="cover-bg-canvas" width="900" height="1200"></canvas>
+                    <canvas class="mask-canvas" id="cover-mask-canvas" width="900" height="1200"></canvas>
+                    <div class="cover-grid"></div>
+                    <div class="cover-toolbar-tag">自动去字中枢</div>
+                    <div class="cover-overlay" id="cover-overlay">
+                        <div class="draggable-cover-text" id="cover-text" contenteditable="true" spellcheck="false">我的叔叔游乐</div>
+
+                        <div class="cover-watermark">
+                            <div class="cover-watermark-left">
+                                <div class="author-avatar" id="cover-avatar" contenteditable="true" spellcheck="false">115</div>
+                                <div class="watermark-name" id="cover-author" contenteditable="true" spellcheck="false">洱畔</div>
+                            </div>
+                            <div class="status-pill">
+                                <span class="status-dot" id="cleanup-dot"></span>
+                                <span id="cleanup-status">当前使用默认底图</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control-card">
+                    <h3 class="control-title">背景处理</h3>
+                    <div class="control-row">
+                        <button class="btn-sys" type="button" onclick="document.getElementById('cover-bg-input').click()">上传背景图</button>
+                        <input type="file" id="cover-bg-input" accept="image/*" onchange="loadCoverBg(this)">
+                        <button class="btn-sys" type="button" onclick="runAutoCleanup()">重新自动去字</button>
+                        <button class="btn-sys" type="button" onclick="restoreOriginalUpload()">恢复原图</button>
+                        <button class="btn-sys" type="button" onclick="resetCoverToDefault()">恢复默认底图</button>
+                    </div>
+                    <div class="control-row">
+                        <button class="btn-sys btn-ghost" id="retouch-toggle" type="button" onclick="toggleRetouchMode()">开启魔法笔刷</button>
+                    </div>
+                    <div class="control-row">
+                        <label class="range-wrap" for="brush-size">
+                            <span>笔刷大小</span>
+                            <input id="brush-size" type="range" min="18" max="100" value="46">
+                            <strong id="brush-size-value">46</strong>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="control-card">
+                    <h3 class="control-title">使用提示</h3>
+                    <ul class="helper-list">
+                        <li>上传后会自动清理深色标题、水印和编号这类显眼文字。</li>
+                        <li>魔法笔刷支持像醒图那样先涂抹选区，松手后自动做内容填充。</li>
+                        <li>封面主标题仍然可以在图上拖拽和直接编辑，不受背景处理影响。</li>
+                    </ul>
+                </div>
+            </div>
+        </aside>
+
+        <section class="panel editor-content">
+            <div class="panel-scroll">
+                <h2 class="section-title">作品正文</h2>
+                <p class="section-subtitle">这部分是非图片内容，后面做“笔记页 / 发现页”双预览时会继续沿用这里的数据。</p>
+
+                <input type="text" class="content-title-input" id="work-title" maxlength="24" placeholder="填写标题会有更多赞哦" value="我的叔叔游乐">
+
+                <div class="content-meta">
+                    <span>添加正文</span>
+                    <span id="content-counter">0 / 1000</span>
+                </div>
+
+                <div class="content-body-input" id="work-body" contenteditable="true" spellcheck="false" data-placeholder="输入作品内容...">父亲总爱在晚饭后拿出那只混色的木匣子，从里面小心翼翼地取出一张泛黄的照片。照片上的男人穿着剪裁奇特的黑斗篷，脸上盖着亮闪闪的银面具，手里握着一把造型锋利的剑。“这是你叔叔游乐，”父亲用手指反复摩挲着照片边缘，“他在很远的魔仙堡做事，等他寄来魔法宝石，咱就把这间小屋翻新，再给你买带花边的新裙子。”</div>
+            </div>
+        </section>
+
+        <aside class="panel preview-manager">
+            <div class="preview-header">
+                <div class="preview-topline">
+                    <h2>预览区域</h2>
+                    <button class="btn-sys btn-primary" type="button" onclick="saveCurrentPreview()">保存当前预览</button>
+                </div>
+
+                <div class="view-switcher">
+                    <button class="switch-tab active" type="button" data-view="note-p">笔记页</button>
+                    <button class="switch-tab" type="button" data-view="discovery-p">发现页</button>
+                </div>
+            </div>
+
+            <div class="preview-stage">
+                <div class="phone-shell">
+                    <div class="phone-screen">
+                        <div class="phone-notch"></div>
+
+                        <div class="preview-content active" id="note-p">
+                            <div class="note-page">
+                                <div class="note-page-top">
+                                    <div class="note-page-author">
+                                        <div class="author-avatar" id="note-author-avatar">115</div>
+                                        <span id="note-author-name">洱畔</span>
+                                    </div>
+                                    <button class="follow-btn" type="button">关注</button>
+                                </div>
+
+                                <div class="note-cover-preview" id="note-cover-preview">
+                                    <img id="note-cover-image" alt="封面预览">
+                                    <div class="overlay-preview-text" id="note-overlay-text"></div>
+                                </div>
+
+                                <div class="note-body">
+                                    <h3 class="note-title-preview" id="note-title-preview"></h3>
+                                    <p class="note-content-preview" id="note-content-preview"></p>
+                                    <div class="note-footer-preview">今天 17:22</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="preview-content" id="discovery-p">
+                            <div class="discover-page">
+                                <div class="discover-tabs">
+                                    <span>关注</span>
+                                    <span class="active">发现</span>
+                                    <span>本地</span>
+                                </div>
+                                <div class="discover-grid" id="discovery-grid"></div>
+                                <div class="discover-bottom-nav">
+                                    <span class="active">首页</span>
+                                    <span>购物</span>
+                                    <span>+</span>
+                                    <span>消息</span>
+                                    <span>我</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<div id="batch-capture-container"></div>
+
+<script>
+    const COVER_CANVAS_WIDTH = 900;
+    const COVER_CANVAS_HEIGHT = 1200;
+
+    const coverMakerCard = document.getElementById("cover-maker-card");
+    const coverCanvas = document.getElementById("cover-bg-canvas");
+    const coverCtx = coverCanvas.getContext("2d", { willReadFrequently: true });
+    const maskCanvas = document.getElementById("cover-mask-canvas");
+    const maskCtx = maskCanvas.getContext("2d", { willReadFrequently: true });
+    const coverText = document.getElementById("cover-text");
+    const cleanupDot = document.getElementById("cleanup-dot");
+    const cleanupStatus = document.getElementById("cleanup-status");
+    const brushSizeInput = document.getElementById("brush-size");
+    const brushSizeValue = document.getElementById("brush-size-value");
+    const retouchToggle = document.getElementById("retouch-toggle");
+    const workTitleInput = document.getElementById("work-title");
+    const workBodyInput = document.getElementById("work-body");
+    const contentCounter = document.getElementById("content-counter");
+    const previewContents = document.querySelectorAll(".preview-content");
+    const switchTabs = document.querySelectorAll(".switch-tab");
+
+    const coverState = {
+        mode: "default",
+        sourceImage: null,
+        originalImageDataUrl: "",
+        cleanedImageDataUrl: "",
+        displayImageDataUrl: "",
+        blurredImageDataUrl: "",
+        retouchEnabled: false,
+        isMaskPainting: false,
+        dragging: false,
+        editingText: false,
+        dragOffsetX: 0,
+        dragOffsetY: 0,
+        strokePoints: []
+    };
+
+    const discoverSeedCards = [
+        {
+            title: "绝绝子！这个手机壳实物也太好用了吧",
+            author: "吃西瓜吧",
+            avatar: "西",
+            likes: "220",
+            palette: "linear-gradient(135deg, #f8fafc, #dce7f8)"
+        },
+        {
+            title: "探店｜Ins风咖啡店，专门招待懂咖的人",
+            author: "Bella十三",
+            avatar: "B",
+            likes: "18",
+            palette: "linear-gradient(135deg, #f4dfc6, #e9b86f)"
+        },
+        {
+            title: "一眼万年的梦中情店",
+            author: "米米子",
+            avatar: "米",
+            likes: "487",
+            palette: "linear-gradient(135deg, #d7e3f4, #f3d9d1)"
+        }
+    ];
+
+    function drawDefaultBackground() {
+        const gradient = coverCtx.createLinearGradient(0, 0, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
+        gradient.addColorStop(0, "#f8fbef");
+        gradient.addColorStop(0.45, "#eef9e1");
+        gradient.addColorStop(1, "#edf8ff");
+        coverCtx.fillStyle = gradient;
+        coverCtx.fillRect(0, 0, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
+
+        paintGlow(760, 180, 280, "rgba(219, 255, 101, 0.55)");
+        paintGlow(600, 440, 240, "rgba(203, 250, 121, 0.35)");
+        paintGlow(160, 980, 260, "rgba(133, 230, 232, 0.22)");
+        paintGlow(380, 760, 220, "rgba(255, 255, 255, 0.48)");
+    }
+
+    function paintGlow(x, y, radius, color) {
+        const glow = coverCtx.createRadialGradient(x, y, radius * 0.2, x, y, radius);
+        glow.addColorStop(0, color);
+        glow.addColorStop(1, "rgba(255,255,255,0)");
+        coverCtx.fillStyle = glow;
+        coverCtx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    }
+
+    function updateCleanupStatus(text, tone) {
+        cleanupStatus.textContent = text;
+        cleanupDot.className = "status-dot" + (tone ? " " + tone : "");
+    }
+
+    function getCanvasDataUrl() {
+        return coverCanvas.toDataURL("image/png");
+    }
+
+    function resetCoverToDefault() {
+        coverState.mode = "default";
+        coverState.sourceImage = null;
+        coverState.originalImageDataUrl = "";
+        coverState.cleanedImageDataUrl = "";
+        coverState.blurredImageDataUrl = "";
+        drawDefaultBackground();
+        coverState.displayImageDataUrl = getCanvasDataUrl();
+        document.getElementById("cover-bg-input").value = "";
+        updateCleanupStatus("当前使用默认底图", "");
+        syncPreviews();
+    }
+
+    function loadImage(url) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            img.src = url;
+        });
+    }
+
+    function drawImageCoverStyle(ctx, image, width, height) {
+        const imageRatio = image.width / image.height;
+        const targetRatio = width / height;
+        let drawWidth;
+        let drawHeight;
+        let offsetX = 0;
+        let offsetY = 0;
+
+        if (imageRatio > targetRatio) {
+            drawHeight = height;
+            drawWidth = drawHeight * imageRatio;
+            offsetX = (width - drawWidth) / 2;
+        } else {
+            drawWidth = width;
+            drawHeight = drawWidth / imageRatio;
+            offsetY = (height - drawHeight) / 2;
+        }
+
+        ctx.clearRect(0, 0, width, height);
+        ctx.drawImage(image, offsetX, offsetY, drawWidth, drawHeight);
+    }
+
+    function createCanvas(width, height) {
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        return canvas;
+    }
+
+    function createSoftBlurDataUrl(sourceCanvas, blurPx) {
+        const blurCanvas = createCanvas(COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
+        const blurCtx = blurCanvas.getContext("2d");
+        blurCtx.filter = `blur(${blurPx}px) saturate(102%)`;
+        blurCtx.drawImage(sourceCanvas, 0, 0, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
+        blurCtx.filter = "none";
+        return blurCanvas.toDataURL("image/png");
+    }
+
+    function buildIntegralLuma(imageData) {
+        const { width, height, data } = imageData;
+        const integral = new Float32Array((width + 1) * (height + 1));
+
+        for (let y = 1; y <= height; y++) {
+            let rowSum = 0;
+            for (let x = 1; x <= width; x++) {
+                const index = ((y - 1) * width + (x - 1)) * 4;
+                const luma = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
+                rowSum += luma;
+                integral[y * (width + 1) + x] = integral[(y - 1) * (width + 1) + x] + rowSum;
+            }
+        }
+
+        return integral;
+    }
+
+    function getWindowMean(integral, width, height, x, y, radius) {
+        const x1 = Math.max(0, x - radius);
+        const y1 = Math.max(0, y - radius);
+        const x2 = Math.min(width - 1, x + radius);
+        const y2 = Math.min(height - 1, y + radius);
+
+        const w = width + 1;
+        const total =
+            integral[(y2 + 1) * w + (x2 + 1)] -
+            integral[y1 * w + (x2 + 1)] -
+            integral[(y2 + 1) * w + x1] +
+            integral[y1 * w + x1];
+        const area = (x2 - x1 + 1) * (y2 - y1 + 1);
+        return total / area;
+    }
+
+    function dilateMask(mask, width, height, radius) {
+        const output = new Uint8Array(mask.length);
+
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                let found = 0;
+                for (let dy = -radius; dy <= radius && !found; dy++) {
+                    const ny = y + dy;
+                    if (ny < 0 || ny >= height) {
+                        continue;
+                    }
+                    for (let dx = -radius; dx <= radius; dx++) {
+                        const nx = x + dx;
+                        if (nx < 0 || nx >= width) {
+                            continue;
+                        }
+                        if (dx * dx + dy * dy > radius * radius) {
+                            continue;
+                        }
+                        if (mask[ny * width + nx]) {
+                            found = 255;
+                            break;
+                        }
+                    }
+                }
+                output[y * width + x] = found;
+            }
+        }
+
+        return output;
+    }
+
+    function clamp(value, min, max) {
+        return Math.max(min, Math.min(value, max));
+    }
+
+    function samplePixel(data, width, height, x, y) {
+        const px = clamp(Math.round(x), 0, width - 1);
+        const py = clamp(Math.round(y), 0, height - 1);
+        const index = (py * width + px) * 4;
+        return [
+            data[index],
+            data[index + 1],
+            data[index + 2],
+            data[index + 3]
+        ];
+    }
+
+    function buildHealSourceImageData() {
+        return coverCtx.getImageData(0, 0, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
+    }
+
+    function clearMaskOverlay() {
+        maskCtx.clearRect(0, 0, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
+    }
+
+    function drawMaskPoint(point, brushRadius) {
+        maskCtx.save();
+        maskCtx.globalCompositeOperation = "source-over";
+        maskCtx.fillStyle = "rgba(59, 130, 246, 0.34)";
+        maskCtx.strokeStyle = "rgba(37, 99, 235, 0.72)";
+        maskCtx.lineWidth = 2;
+        maskCtx.beginPath();
+        maskCtx.arc(point.x, point.y, brushRadius, 0, Math.PI * 2);
+        maskCtx.fill();
+        maskCtx.stroke();
+        maskCtx.restore();
+    }
+
+    function drawMaskSegment(fromPoint, toPoint, brushRadius) {
+        const dx = toPoint.x - fromPoint.x;
+        const dy = toPoint.y - fromPoint.y;
+        const distance = Math.max(1, Math.hypot(dx, dy));
+        const steps = Math.ceil(distance / Math.max(6, brushRadius * 0.22));
+
+        for (let step = 0; step <= steps; step++) {
+            const t = step / steps;
+            drawMaskPoint(
+                {
+                    x: fromPoint.x + dx * t,
+                    y: fromPoint.y + dy * t
+                },
+                brushRadius
+            );
+        }
+    }
+
+    function getMaskBinary(radiusPadding = 10) {
+        const maskImageData = maskCtx.getImageData(0, 0, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
+        const rawMask = new Uint8Array(COVER_CANVAS_WIDTH * COVER_CANVAS_HEIGHT);
+
+        for (let i = 0; i < rawMask.length; i++) {
+            rawMask[i] = maskImageData.data[i * 4 + 3] > 0 ? 255 : 0;
+        }
+
+        return dilateMask(rawMask, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT, radiusPadding);
+    }
+
+    function findReplacementSample(data, mask, x, y, baseRadius) {
+        const directions = 16;
+        const radii = [baseRadius * 1.1, baseRadius * 1.5, baseRadius * 2, baseRadius * 2.6];
+        let red = 0;
+        let green = 0;
+        let blue = 0;
+        let hits = 0;
+
+        for (const radius of radii) {
+            for (let i = 0; i < directions; i++) {
+                const angle = (Math.PI * 2 * i) / directions;
+                const sampleX = clamp(Math.round(x + Math.cos(angle) * radius), 0, COVER_CANVAS_WIDTH - 1);
+                const sampleY = clamp(Math.round(y + Math.sin(angle) * radius), 0, COVER_CANVAS_HEIGHT - 1);
+                const sampleIndex = sampleY * COVER_CANVAS_WIDTH + sampleX;
+
+                if (mask[sampleIndex]) {
+                    continue;
+                }
+
+                const pixel = samplePixel(data, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT, sampleX, sampleY);
+                red += pixel[0];
+                green += pixel[1];
+                blue += pixel[2];
+                hits++;
+            }
+
+            if (hits >= 6) {
+                break;
+            }
+        }
+
+        if (hits === 0) {
+            const fallback = samplePixel(data, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT, x, y);
+            return [fallback[0], fallback[1], fallback[2]];
+        }
+
+        return [red / hits, green / hits, blue / hits];
+    }
+
+    function healMaskedRegion() {
+        const brushRadius = Number(brushSizeInput.value);
+        const mask = getMaskBinary(Math.max(4, Math.floor(brushRadius * 0.18)));
+        const sourceImageData = buildHealSourceImageData();
+        const resultImageData = coverCtx.createImageData(COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
+        resultImageData.data.set(sourceImageData.data);
+
+        for (let y = 0; y < COVER_CANVAS_HEIGHT; y++) {
+            for (let x = 0; x < COVER_CANVAS_WIDTH; x++) {
+                const pixelIndex = y * COVER_CANVAS_WIDTH + x;
+                if (!mask[pixelIndex]) {
+                    continue;
+                }
+
+                const [r, g, b] = findReplacementSample(sourceImageData.data, mask, x, y, brushRadius);
+                const targetIndex = pixelIndex * 4;
+                resultImageData.data[targetIndex] = r;
+                resultImageData.data[targetIndex + 1] = g;
+                resultImageData.data[targetIndex + 2] = b;
+                resultImageData.data[targetIndex + 3] = 255;
+            }
+        }
+
+        coverCtx.putImageData(resultImageData, 0, 0);
+        coverCtx.save();
+        coverCtx.globalAlpha = 0.22;
+        coverCtx.filter = "blur(4px)";
+        coverCtx.drawImage(coverCanvas, 0, 0);
+        coverCtx.restore();
+        coverCtx.filter = "none";
+        clearMaskOverlay();
+    }
+
+    function healPatchAtPoint(point, brushRadius) {
+        const sourceImageData = buildHealSourceImageData();
+        const resultImageData = coverCtx.createImageData(COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
+        resultImageData.data.set(sourceImageData.data);
+
+        const minX = clamp(Math.floor(point.x - brushRadius - 2), 0, COVER_CANVAS_WIDTH - 1);
+        const maxX = clamp(Math.ceil(point.x + brushRadius + 2), 0, COVER_CANVAS_WIDTH - 1);
+        const minY = clamp(Math.floor(point.y - brushRadius - 2), 0, COVER_CANVAS_HEIGHT - 1);
+        const maxY = clamp(Math.ceil(point.y + brushRadius + 2), 0, COVER_CANVAS_HEIGHT - 1);
+
+        for (let y = minY; y <= maxY; y++) {
+            for (let x = minX; x <= maxX; x++) {
+                const dx = x - point.x;
+                const dy = y - point.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance > brushRadius) {
+                    continue;
+                }
+
+                const angle = Math.atan2(dy, dx);
+                const sampleRadius = brushRadius * 1.35;
+                const tangentRadius = brushRadius * 0.28;
+
+                const sampleA = samplePixel(
+                    sourceImageData.data,
+                    COVER_CANVAS_WIDTH,
+                    COVER_CANVAS_HEIGHT,
+                    point.x + Math.cos(angle) * sampleRadius - Math.sin(angle) * tangentRadius,
+                    point.y + Math.sin(angle) * sampleRadius + Math.cos(angle) * tangentRadius
+                );
+
+                const sampleB = samplePixel(
+                    sourceImageData.data,
+                    COVER_CANVAS_WIDTH,
+                    COVER_CANVAS_HEIGHT,
+                    point.x + Math.cos(angle) * sampleRadius + Math.sin(angle) * tangentRadius,
+                    point.y + Math.sin(angle) * sampleRadius - Math.cos(angle) * tangentRadius
+                );
+
+                const sampleC = samplePixel(
+                    sourceImageData.data,
+                    COVER_CANVAS_WIDTH,
+                    COVER_CANVAS_HEIGHT,
+                    point.x - Math.cos(angle) * sampleRadius * 0.82,
+                    point.y - Math.sin(angle) * sampleRadius * 0.82
+                );
+
+                const blend = 0.72 + (1 - distance / brushRadius) * 0.22;
+                const targetIndex = (y * COVER_CANVAS_WIDTH + x) * 4;
+
+                for (let channel = 0; channel < 3; channel++) {
+                    const mixedSample = sampleA[channel] * 0.42 + sampleB[channel] * 0.42 + sampleC[channel] * 0.16;
+                    const current = sourceImageData.data[targetIndex + channel];
+                    resultImageData.data[targetIndex + channel] = current * (1 - blend) + mixedSample * blend;
+                }
+
+                resultImageData.data[targetIndex + 3] = 255;
+            }
+        }
+
+        coverCtx.putImageData(resultImageData, 0, 0);
+
+        coverCtx.save();
+        coverCtx.globalAlpha = 0.18;
+        coverCtx.filter = "blur(5px)";
+        coverCtx.drawImage(coverCanvas, 0, 0);
+        coverCtx.restore();
+        coverCtx.filter = "none";
+    }
+
+    async function cleanupTextFromImage(imageDataUrl) {
+        const sourceImage = await loadImage(imageDataUrl);
+        const baseCanvas = createCanvas(COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
+        const baseCtx = baseCanvas.getContext("2d", { willReadFrequently: true });
+        drawImageCoverStyle(baseCtx, sourceImage, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
+
+        const baseImageData = baseCtx.getImageData(0, 0, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
+        const integral = buildIntegralLuma(baseImageData);
+        const mask = new Uint8Array(COVER_CANVAS_WIDTH * COVER_CANVAS_HEIGHT);
+        const { data } = baseImageData;
+
+        for (let y = 0; y < COVER_CANVAS_HEIGHT; y++) {
+            for (let x = 0; x < COVER_CANVAS_WIDTH; x++) {
+                const pixelIndex = y * COVER_CANVAS_WIDTH + x;
+                const index = pixelIndex * 4;
+                const r = data[index];
+                const g = data[index + 1];
+                const b = data[index + 2];
+                const max = Math.max(r, g, b);
+                const min = Math.min(r, g, b);
+                const luma = r * 0.299 + g * 0.587 + b * 0.114;
+                const localMean = getWindowMean(integral, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT, x, y, 8);
+                const saturation = max - min;
+                const isDarkTextCandidate =
+                    (luma < Math.max(92, localMean - 38) && saturation < 92) ||
+                    (luma < 70 && saturation < 135);
+                const isLightWatermarkCandidate =
+                    saturation < 36 &&
+                    (
+                        luma > Math.min(250, localMean + 18) ||
+                        (luma > 200 && Math.abs(luma - localMean) > 22)
+                    );
+                const isGreyWatermarkCandidate =
+                    saturation < 24 &&
+                    Math.abs(luma - localMean) > 16 &&
+                    luma > 132;
+
+                if (isDarkTextCandidate || isLightWatermarkCandidate || isGreyWatermarkCandidate) {
+                    mask[pixelIndex] = 255;
+                }
+            }
+        }
+
+        const expandedMask = dilateMask(mask, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT, 6);
+        const blurDataUrl = createSoftBlurDataUrl(baseCanvas, 14);
+        const blurImage = await loadImage(blurDataUrl);
+        const blurCanvas = createCanvas(COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
+        const blurCtx = blurCanvas.getContext("2d");
+        blurCtx.drawImage(blurImage, 0, 0, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
+        const blurImageData = blurCtx.getImageData(0, 0, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
+
+        const resultCanvas = createCanvas(COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
+        const resultCtx = resultCanvas.getContext("2d");
+        const resultImageData = resultCtx.createImageData(COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
+
+        for (let i = 0; i < expandedMask.length; i++) {
+            const baseIndex = i * 4;
+            const useBlur = expandedMask[i] > 0;
+            resultImageData.data[baseIndex] = useBlur ? blurImageData.data[baseIndex] : baseImageData.data[baseIndex];
+            resultImageData.data[baseIndex + 1] = useBlur ? blurImageData.data[baseIndex + 1] : baseImageData.data[baseIndex + 1];
+            resultImageData.data[baseIndex + 2] = useBlur ? blurImageData.data[baseIndex + 2] : baseImageData.data[baseIndex + 2];
+            resultImageData.data[baseIndex + 3] = 255;
+        }
+
+        resultCtx.putImageData(resultImageData, 0, 0);
+
+        return {
+            cleanedDataUrl: resultCanvas.toDataURL("image/png"),
+            blurredDataUrl: blurDataUrl
+        };
+    }
+
+    async function renderDataUrlToCover(url) {
+        const img = await loadImage(url);
+        coverCtx.clearRect(0, 0, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
+        coverCtx.drawImage(img, 0, 0, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
+        coverState.displayImageDataUrl = getCanvasDataUrl();
+        syncPreviews();
+    }
+
+    async function loadCoverBg(input) {
+        if (!input.files || !input.files[0]) {
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = async function (e) {
+            const imageDataUrl = e.target.result;
+            coverState.mode = "uploaded";
+            coverState.originalImageDataUrl = imageDataUrl;
+            updateCleanupStatus("正在自动去掉原图文字...", "warn");
+
+            try {
+                const result = await cleanupTextFromImage(imageDataUrl);
+                coverState.cleanedImageDataUrl = result.cleanedDataUrl;
+                coverState.blurredImageDataUrl = result.blurredDataUrl;
+                await renderDataUrlToCover(result.cleanedDataUrl);
+                updateCleanupStatus("背景已自动去字，可继续用魔法笔刷修补", "ready");
+            } catch (error) {
+                console.error("cleanup failed", error);
+                await renderDataUrlToCover(imageDataUrl);
+                updateCleanupStatus("自动去字失败，当前显示原图", "warn");
+            }
+        };
+
+        reader.readAsDataURL(input.files[0]);
+    }
+
+    async function runAutoCleanup() {
+        if (!coverState.originalImageDataUrl) {
+            updateCleanupStatus("还没有上传背景图", "warn");
+            return;
+        }
+
+        updateCleanupStatus("正在重新自动去字...", "warn");
+        const result = await cleanupTextFromImage(coverState.originalImageDataUrl);
+        coverState.cleanedImageDataUrl = result.cleanedDataUrl;
+        coverState.blurredImageDataUrl = result.blurredDataUrl;
+        await renderDataUrlToCover(result.cleanedDataUrl);
+        updateCleanupStatus("已重新完成自动去字", "ready");
+    }
+
+    async function restoreOriginalUpload() {
+        if (!coverState.originalImageDataUrl) {
+            updateCleanupStatus("没有可恢复的上传原图", "warn");
+            return;
+        }
+
+        await renderDataUrlToCover(coverState.originalImageDataUrl);
+        updateCleanupStatus("当前显示上传原图", "warn");
+    }
+
+    function toggleRetouchMode() {
+        coverState.retouchEnabled = !coverState.retouchEnabled;
+        coverState.isMaskPainting = false;
+        coverState.strokePoints = [];
+        clearMaskOverlay();
+        retouchToggle.classList.toggle("active", coverState.retouchEnabled);
+        retouchToggle.textContent = coverState.retouchEnabled ? "关闭魔法笔刷" : "开启魔法笔刷";
+        coverCanvas.style.cursor = coverState.retouchEnabled ? "crosshair" : "default";
+        updateCleanupStatus(
+            coverState.retouchEnabled ? "魔法笔刷已开启，涂抹后松手会自动内容填充" : cleanupStatus.textContent,
+            coverState.retouchEnabled ? "ready" : cleanupDot.classList.contains("ready") ? "ready" : cleanupDot.classList.contains("warn") ? "warn" : ""
+        );
+    }
+
+    function getCanvasPoint(event) {
+        const rect = coverCanvas.getBoundingClientRect();
+        const scaleX = COVER_CANVAS_WIDTH / rect.width;
+        const scaleY = COVER_CANVAS_HEIGHT / rect.height;
+        return {
+            x: (event.clientX - rect.left) * scaleX,
+            y: (event.clientY - rect.top) * scaleY
+        };
+    }
+
+    let retouchPointerDown = false;
+    let retouchPromise = Promise.resolve();
+
+    coverCanvas.addEventListener("pointerdown", (event) => {
+        if (!coverState.retouchEnabled) {
+            return;
+        }
+        retouchPointerDown = true;
+        coverState.isMaskPainting = true;
+        const point = getCanvasPoint(event);
+        coverState.strokePoints = [point];
+        clearMaskOverlay();
+        drawMaskPoint(point, Number(brushSizeInput.value));
+    });
+
+    coverCanvas.addEventListener("pointermove", (event) => {
+        if (!coverState.retouchEnabled || !retouchPointerDown) {
+            return;
+        }
+        const point = getCanvasPoint(event);
+        const lastPoint = coverState.strokePoints[coverState.strokePoints.length - 1] || point;
+        drawMaskSegment(lastPoint, point, Number(brushSizeInput.value));
+        coverState.strokePoints.push(point);
+    });
+
+    document.addEventListener("pointerup", () => {
+        if (coverState.retouchEnabled && retouchPointerDown && coverState.strokePoints.length) {
+            updateCleanupStatus("正在根据涂抹区域自动填充内容...", "warn");
+            retouchPromise = retouchPromise.then(() => {
+                healMaskedRegion();
+                coverState.displayImageDataUrl = getCanvasDataUrl();
+                syncPreviews();
+                updateCleanupStatus("内容填充完成，可以继续涂抹下一块区域", "ready");
+            });
+        }
+        retouchPointerDown = false;
+        coverState.isMaskPainting = false;
+        coverState.strokePoints = [];
+    });
+
+    brushSizeInput.addEventListener("input", () => {
+        brushSizeValue.textContent = brushSizeInput.value;
+    });
+
+    function centerTextInit() {
+        const defaultTop = Math.max(100, coverMakerCard.offsetHeight * 0.13);
+        const defaultLeft = Math.max(36, coverMakerCard.offsetWidth * 0.08);
+        coverText.style.top = `${defaultTop}px`;
+        coverText.style.left = `${defaultLeft}px`;
+        syncPreviews();
+    }
+
+    function clampCoverTextPosition(nextLeft, nextTop) {
+        const maxLeft = coverMakerCard.offsetWidth - coverText.offsetWidth - 20;
+        const maxTop = coverMakerCard.offsetHeight - coverText.offsetHeight - 94;
+        return {
+            left: Math.max(20, Math.min(nextLeft, maxLeft)),
+            top: Math.max(20, Math.min(nextTop, maxTop))
+        };
+    }
+
+    coverText.addEventListener("focus", () => {
+        coverState.editingText = true;
+        coverText.classList.add("editing");
+    });
+
+    coverText.addEventListener("blur", () => {
+        coverState.editingText = false;
+        coverText.classList.remove("editing");
+        syncPreviews();
+    });
+
+    coverText.addEventListener("pointerdown", (event) => {
+        if (coverState.editingText || event.target !== coverText) {
+            return;
+        }
+
+        const rect = coverText.getBoundingClientRect();
+        coverState.dragging = true;
+        coverState.dragOffsetX = event.clientX - rect.left;
+        coverState.dragOffsetY = event.clientY - rect.top;
+        coverText.setPointerCapture(event.pointerId);
+        event.preventDefault();
+    });
+
+    coverText.addEventListener("pointermove", (event) => {
+        if (!coverState.dragging) {
+            return;
+        }
+
+        const parentRect = coverMakerCard.getBoundingClientRect();
+        const nextLeft = event.clientX - parentRect.left - coverState.dragOffsetX;
+        const nextTop = event.clientY - parentRect.top - coverState.dragOffsetY;
+        const position = clampCoverTextPosition(nextLeft, nextTop);
+        coverText.style.left = `${position.left}px`;
+        coverText.style.top = `${position.top}px`;
+        syncPreviews();
+    });
+
+    coverText.addEventListener("pointerup", (event) => {
+        if (!coverState.dragging) {
+            return;
+        }
+        coverState.dragging = false;
+        coverText.releasePointerCapture(event.pointerId);
+        syncPreviews();
+    });
+
+    coverText.addEventListener("dblclick", () => {
+        coverState.editingText = true;
+        coverText.classList.add("editing");
+        coverText.focus();
+        document.getSelection()?.selectAllChildren(coverText);
+    });
+
+    coverText.addEventListener("input", syncPreviews);
+    document.getElementById("cover-avatar").addEventListener("input", syncPreviews);
+    document.getElementById("cover-author").addEventListener("input", syncPreviews);
+
+    workTitleInput.addEventListener("input", syncPreviews);
+    workBodyInput.addEventListener("input", syncPreviews);
+
+    function getPlainBodyText() {
+        return workBodyInput.innerText.trim();
+    }
+
+    function updateContentCounter() {
+        const textLength = getPlainBodyText().length;
+        contentCounter.textContent = `${textLength} / 1000`;
+    }
+
+    function getCoverPreviewState() {
+        const cardRect = coverMakerCard.getBoundingClientRect();
+        const textRect = coverText.getBoundingClientRect();
+
+        return {
+            imageDataUrl: coverState.displayImageDataUrl || getCanvasDataUrl(),
+            title: coverText.innerText.trim() || "输入封面标题",
+            author: document.getElementById("cover-author").innerText.trim() || "洱畔",
+            avatar: document.getElementById("cover-avatar").innerText.trim() || "115",
+            topRatio: (textRect.top - cardRect.top) / cardRect.height,
+            leftRatio: (textRect.left - cardRect.left) / cardRect.width,
+            widthRatio: textRect.width / cardRect.width
+        };
+    }
+
+    function applyOverlayText(node, previewState, width, height, fontScale) {
+        node.textContent = previewState.title;
+        node.style.top = `${previewState.topRatio * height}px`;
+        node.style.left = `${previewState.leftRatio * width}px`;
+        node.style.width = `${previewState.widthRatio * width}px`;
+        node.style.fontSize = `${fontScale}px`;
+    }
+
+    function updateNotePreview(previewState) {
+        document.getElementById("note-author-avatar").textContent = previewState.avatar;
+        document.getElementById("note-author-name").textContent = previewState.author;
+        document.getElementById("note-title-preview").textContent = workTitleInput.value.trim() || "无标题";
+        document.getElementById("note-content-preview").textContent = getPlainBodyText() || "这里会显示正文内容预览。";
+
+        const coverImage = document.getElementById("note-cover-image");
+        coverImage.src = previewState.imageDataUrl;
+        applyOverlayText(document.getElementById("note-overlay-text"), previewState, coverImage.parentElement.clientWidth, coverImage.parentElement.clientHeight, 25);
+    }
+
+    function createDiscoverCard(cardData, previewState, isDynamic) {
+        const coverContent = isDynamic
+            ? `
+                <div class="discover-cover">
+                    <img src="${previewState.imageDataUrl}" alt="封面预览">
+                    <div class="overlay-preview-text" style="top:${previewState.topRatio * 100}%;left:${previewState.leftRatio * 100}%;width:${previewState.widthRatio * 100}%;font-size:18px;">${escapeHtml(previewState.title).replace(/\n/g, "<br>")}</div>
+                </div>
+            `
+            : `
+                <div class="discover-cover" style="background:${cardData.palette};"></div>
+            `;
+
+        return `
+            <article class="discover-card">
+                ${coverContent}
+                <div class="discover-info">
+                    <p class="discover-title">${escapeHtml(cardData.title)}</p>
+                    <div class="discover-meta">
+                        <div class="discover-author">
+                            <div class="author-avatar" style="width:20px;height:20px;font-size:10px;">${escapeHtml(cardData.avatar)}</div>
+                            <span>${escapeHtml(cardData.author)}</span>
+                        </div>
+                        <div class="discover-like">
+                            <svg class="heart-icon-p" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
+                            <span>${escapeHtml(cardData.likes)}</span>
+                        </div>
+                    </div>
+                </div>
+            </article>
+        `;
+    }
+
+    function updateDiscoveryPreview(previewState) {
+        const grid = document.getElementById("discovery-grid");
+        const title = workTitleInput.value.trim() || "无标题";
+
+        const cards = [
+            {
+                title,
+                author: previewState.author,
+                avatar: previewState.avatar,
+                likes: "137"
+            },
+            ...discoverSeedCards
+        ];
+
+        grid.innerHTML = cards
+            .map((card, index) => createDiscoverCard(card, previewState, index === 0))
+            .join("");
+    }
+
+    function syncPreviews() {
+        updateContentCounter();
+        const previewState = getCoverPreviewState();
+        updateNotePreview(previewState);
+        updateDiscoveryPreview(previewState);
+    }
+
+    switchTabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+            switchTabs.forEach((item) => item.classList.remove("active"));
+            previewContents.forEach((item) => item.classList.remove("active"));
+            tab.classList.add("active");
+            document.getElementById(tab.dataset.view).classList.add("active");
+        });
+    });
+
+    function captureHelper(target, filename) {
+        return html2canvas(target, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: null,
+            logging: false
+        }).then((canvas) => {
+            const link = document.createElement("a");
+            link.href = canvas.toDataURL("image/jpeg", 0.92);
+            link.download = filename;
+            link.click();
+        });
+    }
+
+    function saveSingleCover() {
+        const wrapper = document.createElement("div");
+        wrapper.style.position = "absolute";
+        wrapper.style.left = "-9999px";
+        wrapper.style.top = "-9999px";
+        wrapper.style.padding = "20px";
+        wrapper.style.background = "#fff";
+
+        const clone = coverMakerCard.cloneNode(true);
+        const canvasClone = clone.querySelector("#cover-bg-canvas");
+        const cloneCtx = canvasClone.getContext("2d");
+        const sourceImage = new Image();
+        sourceImage.src = coverState.displayImageDataUrl || getCanvasDataUrl();
+        sourceImage.onload = () => {
+            cloneCtx.drawImage(sourceImage, 0, 0, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
+            wrapper.appendChild(clone);
+            document.body.appendChild(wrapper);
+            captureHelper(wrapper, `cover-${Date.now()}.jpg`).finally(() => wrapper.remove());
+        };
+    }
+
+    function buildCaptureFrame(activeView) {
+        const wrapper = document.createElement("div");
+        wrapper.className = "hidden-capture-frame";
+        const phoneScreen = document.createElement("div");
+        phoneScreen.className = "phone-screen";
+        const notch = document.createElement("div");
+        notch.className = "phone-notch";
+        const clonedContent = document.getElementById(activeView).cloneNode(true);
+        clonedContent.classList.add("active");
+        wrapper.appendChild(phoneScreen);
+        phoneScreen.appendChild(notch);
+        phoneScreen.appendChild(clonedContent);
+        return wrapper;
+    }
+
+    function saveCurrentPreview() {
+        const activeView = document.querySelector(".switch-tab.active").dataset.view;
+        const batchContainer = document.getElementById("batch-capture-container");
+        batchContainer.innerHTML = "";
+        const frame = buildCaptureFrame(activeView);
+        batchContainer.appendChild(frame);
+        captureHelper(frame, `${activeView}-${Date.now()}.jpg`).finally(() => {
+            batchContainer.innerHTML = "";
+        });
+    }
+
+    function escapeHtml(text) {
+        return text
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#39;");
+    }
+
+    window.addEventListener("resize", syncPreviews);
+    window.addEventListener("load", () => {
+        drawDefaultBackground();
+        coverState.displayImageDataUrl = getCanvasDataUrl();
+        centerTextInit();
+        syncPreviews();
+    });
+</script>
+</body>
+</html>
