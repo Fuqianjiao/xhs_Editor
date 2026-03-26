@@ -387,9 +387,9 @@
         width: 100%;
         border: none;
         border-bottom: 1px solid #e6eaf0;
-        font-size: 34px;
+        font-size: 28px;
         font-weight: 700;
-        padding: 8px 0 16px;
+        padding: 4px 0 14px;
         background: transparent;
         color: #101114;
     }
@@ -406,6 +406,38 @@
         margin: 18px 0 10px;
         color: var(--text-color-sub);
         font-size: 14px;
+    }
+
+    .emoji-suggest {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin: 14px 0 6px;
+    }
+
+    .emoji-label {
+        color: #9aa1ac;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .emoji-chip {
+        border: 1px solid #e5e7eb;
+        background: #fff;
+        color: #3b4250;
+        border-radius: 999px;
+        padding: 7px 12px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: 0.18s ease;
+    }
+
+    .emoji-chip:hover {
+        border-color: #cbd5e1;
+        background: #f8fafc;
+        transform: translateY(-1px);
     }
 
     .content-body-input {
@@ -824,10 +856,18 @@
 
         <section class="panel editor-content">
             <div class="panel-scroll">
-                <h2 class="section-title">作品正文</h2>
-                <p class="section-subtitle">这部分是非图片内容，后面做“笔记页 / 发现页”双预览时会继续沿用这里的数据。</p>
-
                 <input type="text" class="content-title-input" id="work-title" maxlength="24" placeholder="填写标题会有更多赞哦" value="我的叔叔游乐">
+
+                <div class="emoji-suggest" id="emoji-suggest">
+                    <span class="emoji-label">推荐 emoji</span>
+                    <button class="emoji-chip" type="button" data-emoji="✨">✨</button>
+                    <button class="emoji-chip" type="button" data-emoji="🌿">🌿</button>
+                    <button class="emoji-chip" type="button" data-emoji="💫">💫</button>
+                    <button class="emoji-chip" type="button" data-emoji="🎧">🎧</button>
+                    <button class="emoji-chip" type="button" data-emoji="📖">📖</button>
+                    <button class="emoji-chip" type="button" data-emoji="🫧">🫧</button>
+                    <button class="emoji-chip" type="button" data-emoji="☁️">☁️</button>
+                </div>
 
                 <div class="content-meta">
                     <span>添加正文</span>
@@ -923,6 +963,7 @@
     const workTitleInput = document.getElementById("work-title");
     const workBodyInput = document.getElementById("work-body");
     const contentCounter = document.getElementById("content-counter");
+    const emojiSuggest = document.getElementById("emoji-suggest");
     const previewContents = document.querySelectorAll(".preview-content");
     const switchTabs = document.querySelectorAll(".switch-tab");
 
@@ -1608,6 +1649,26 @@
 
     workTitleInput.addEventListener("input", syncPreviews);
     workBodyInput.addEventListener("input", syncPreviews);
+
+    emojiSuggest.addEventListener("click", (event) => {
+        const trigger = event.target.closest("[data-emoji]");
+        if (!trigger) {
+            return;
+        }
+
+        const emoji = trigger.dataset.emoji;
+        const start = workTitleInput.selectionStart ?? workTitleInput.value.length;
+        const end = workTitleInput.selectionEnd ?? workTitleInput.value.length;
+        const prefix = workTitleInput.value.slice(0, start);
+        const suffix = workTitleInput.value.slice(end);
+        const spacer = prefix && !prefix.endsWith(" ") ? " " : "";
+
+        workTitleInput.value = `${prefix}${spacer}${emoji}${suffix}`;
+        const caret = (prefix + spacer + emoji).length;
+        workTitleInput.focus();
+        workTitleInput.setSelectionRange(caret, caret);
+        syncPreviews();
+    });
 
     function getPlainBodyText() {
         return workBodyInput.innerText.trim();
