@@ -81,10 +81,23 @@
     .main-wrapper {
         flex: 1;
         display: grid;
-        grid-template-columns: 420px minmax(420px, 1fr) 460px;
+        grid-template-columns: 420px 460px minmax(420px, 1fr);
+        grid-template-areas: "covers preview content";
         gap: 18px;
         padding: 18px;
         min-height: 0;
+    }
+
+    .editor-covers {
+        grid-area: covers;
+    }
+
+    .preview-manager {
+        grid-area: preview;
+    }
+
+    .editor-content {
+        grid-area: content;
     }
 
     .panel {
@@ -100,11 +113,17 @@
         height: 100%;
         overflow: auto;
         padding: 22px;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+
+    .panel-scroll::-webkit-scrollbar {
+        display: none;
     }
 
     .section-title {
         margin: 0 0 8px;
-        font-size: 28px;
+        font-size: 24px;
         line-height: 1.15;
     }
 
@@ -183,26 +202,51 @@
         pointer-events: none;
     }
 
-    .draggable-cover-text {
+    .cover-layer-stage {
         position: absolute;
-        top: 120px;
-        left: 44px;
-        max-width: calc(100% - 88px);
+        inset: 0;
+        z-index: 3;
+    }
+
+    .cover-layer {
+        position: absolute;
+        cursor: move;
+        user-select: none;
+        touch-action: none;
+    }
+
+    .cover-layer.selected {
+        outline: 2px solid #3b82f6;
+        outline-offset: 2px;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+    }
+
+    .cover-layer.text-layer {
+        min-width: 80px;
+        max-width: calc(100% - 40px);
         font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft Yahei", sans-serif;
         font-size: 58px;
         line-height: 1.18;
         font-weight: 500;
         letter-spacing: -0.04em;
         color: #101114;
-        cursor: move;
-        user-select: none;
         white-space: pre-wrap;
         text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+        padding: 2px 4px;
     }
 
-    .draggable-cover-text.editing {
+    .cover-layer.text-layer.editing {
         cursor: text;
         user-select: text;
+    }
+
+    .cover-layer.image-layer img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 14px;
+        pointer-events: none;
     }
 
     .cover-watermark {
@@ -305,6 +349,153 @@
         transform: translateY(-1px);
         box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
         border-color: #c6ced9;
+    }
+
+    .font-select {
+        width: 100%;
+        padding: 11px 14px;
+        border-radius: 16px;
+        border: 1px solid #e6eaf0;
+        background: #fff;
+        color: #2e3440;
+        font-size: 14px;
+        font-weight: 600;
+        outline: none;
+    }
+
+    .font-select:focus {
+        border-color: #b9c2cf;
+    }
+
+    .editor-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 88px;
+        gap: 10px;
+        width: 100%;
+    }
+
+    .mini-input,
+    .color-input {
+        width: 100%;
+        padding: 11px 14px;
+        border-radius: 16px;
+        border: 1px solid #e6eaf0;
+        background: #fff;
+        color: #2e3440;
+        font-size: 14px;
+        font-weight: 600;
+        outline: none;
+    }
+
+    .color-input {
+        min-height: 46px;
+        padding: 6px;
+        cursor: pointer;
+    }
+
+    .mini-input:focus,
+    .color-input:focus {
+        border-color: #b9c2cf;
+    }
+
+    .tool-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        width: 100%;
+    }
+
+    .tool-row.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .tool-btn {
+        border: 1px solid #e6eaf0;
+        background: #fff;
+        color: #2f3745;
+        border-radius: 16px;
+        min-height: 46px;
+        font-size: 20px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: 0.18s ease;
+    }
+
+    .tool-btn:hover {
+        border-color: #cbd5e1;
+        background: #f8fafc;
+    }
+
+    .tool-btn.active {
+        background: #1f2937;
+        border-color: #1f2937;
+        color: #fff;
+    }
+
+    .tool-label {
+        margin: 0 0 8px;
+        color: #8a8f98;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .layer-tools {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        width: 100%;
+    }
+
+    .layer-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 100%;
+    }
+
+    .layer-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid #e6eaf0;
+        border-radius: 14px;
+        background: #fff;
+        cursor: pointer;
+        transition: 0.18s ease;
+    }
+
+    .layer-item.active {
+        border-color: #2563eb;
+        background: #eff6ff;
+    }
+
+    .layer-item-main {
+        min-width: 0;
+    }
+
+    .layer-item-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #2f3745;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .layer-item-meta {
+        color: #8a8f98;
+        font-size: 12px;
+        margin-top: 2px;
+    }
+
+    .layer-count {
+        color: #8a8f98;
+        font-size: 12px;
+        font-weight: 700;
     }
 
     .btn-primary {
@@ -450,7 +641,13 @@
         outline: none;
         color: #30343b;
         overflow-y: auto;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
         white-space: pre-wrap;
+    }
+
+    .content-body-input::-webkit-scrollbar {
+        display: none;
     }
 
     .content-body-input:empty::before {
@@ -515,8 +712,14 @@
         min-height: 0;
         padding: 18px;
         overflow: auto;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
         display: flex;
         justify-content: center;
+    }
+
+    .preview-stage::-webkit-scrollbar {
+        display: none;
     }
 
     .phone-shell {
@@ -531,7 +734,7 @@
 
     .phone-screen {
         position: relative;
-        min-height: 760px;
+        height: 760px;
         border-radius: 34px;
         overflow: hidden;
         background: #fff;
@@ -553,6 +756,8 @@
     .preview-content {
         display: none;
         padding-top: 26px;
+        height: 100%;
+        overflow: hidden;
     }
 
     .preview-content.active {
@@ -560,8 +765,9 @@
     }
 
     .note-page {
-        min-height: 760px;
+        height: 100%;
         background: #fff;
+        overflow: hidden;
     }
 
     .note-page-top {
@@ -640,9 +846,10 @@
     }
 
     .discover-page {
-        min-height: 760px;
+        height: 100%;
         padding: 20px 14px 22px;
         background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        overflow: hidden;
     }
 
     .discover-tabs {
@@ -772,6 +979,10 @@
 
         .main-wrapper {
             grid-template-columns: 1fr;
+            grid-template-areas:
+                "preview"
+                "covers"
+                "content";
         }
 
         .panel {
@@ -807,7 +1018,7 @@
                     <div class="cover-grid"></div>
                     <div class="cover-toolbar-tag">自动去字中枢</div>
                     <div class="cover-overlay" id="cover-overlay">
-                        <div class="draggable-cover-text" id="cover-text" contenteditable="true" spellcheck="false">我的叔叔游乐</div>
+                        <div class="cover-layer-stage" id="cover-layer-stage"></div>
 
                         <div class="cover-watermark">
                             <div class="cover-watermark-left">
@@ -818,6 +1029,82 @@
                                 <span class="status-dot" id="cleanup-dot"></span>
                                 <span id="cleanup-status">当前使用默认底图</span>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <input type="file" id="cover-layer-image-input" accept="image/*" style="display:none">
+
+                <div class="control-card">
+                    <h3 class="control-title">图层</h3>
+                    <div class="control-row">
+                        <div class="layer-tools">
+                            <button class="btn-sys" type="button" id="add-text-layer-btn">添加文字</button>
+                            <button class="btn-sys" type="button" id="add-image-layer-btn">添加图片</button>
+                            <button class="btn-sys" type="button" id="move-layer-up-btn">上移一层</button>
+                            <button class="btn-sys" type="button" id="move-layer-down-btn">下移一层</button>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <button class="btn-sys" type="button" id="delete-layer-btn">删除当前图层</button>
+                        <span class="layer-count" id="layer-count">1 / 10 图层</span>
+                    </div>
+                    <div class="control-row">
+                        <div class="layer-list" id="layer-list"></div>
+                    </div>
+                </div>
+
+                <div class="control-card">
+                    <h3 class="control-title">文字编辑</h3>
+                    <div class="control-row">
+                        <div style="width:100%;">
+                            <p class="tool-label">字体与字号</p>
+                            <div class="editor-grid">
+                                <select class="font-select" id="cover-font-select" aria-label="封面字体选择">
+                                    <option value="PingFang SC, Hiragino Sans GB, Microsoft Yahei, sans-serif">默认黑体</option>
+                                    <option value="Microsoft YaHei, PingFang SC, sans-serif">微软雅黑</option>
+                                    <option value="Source Han Serif SC, Songti SC, SimSun, serif">宋体</option>
+                                    <option value="Kaiti SC, STKaiti, Kaiti, serif">楷体</option>
+                                    <option value="STXingkai, KaiTi, cursive">行楷</option>
+                                    <option value="FangSong, STFangsong, serif">仿宋</option>
+                                </select>
+                                <input class="mini-input" id="cover-font-size" type="number" min="24" max="120" value="58" aria-label="封面字号">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <div style="width:100%;">
+                            <p class="tool-label">样式</p>
+                            <div class="tool-row">
+                                <button class="tool-btn" id="cover-bold-btn" type="button" title="加粗">B</button>
+                                <button class="tool-btn" id="cover-italic-btn" type="button" title="斜体"><em>I</em></button>
+                                <button class="tool-btn" id="cover-underline-btn" type="button" title="下划线"><u>U</u></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <div style="width:100%;">
+                            <p class="tool-label">对齐</p>
+                            <div class="tool-row">
+                                <button class="tool-btn active" id="cover-align-left" type="button" title="左对齐">≡</button>
+                                <button class="tool-btn" id="cover-align-center" type="button" title="居中">≣</button>
+                                <button class="tool-btn" id="cover-align-right" type="button" title="右对齐">☰</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <div style="width:100%;">
+                            <p class="tool-label">行距与字距</p>
+                            <div class="tool-row two">
+                                <input class="mini-input" id="cover-line-height" type="number" min="0.8" max="2.4" step="0.05" value="1.18" aria-label="行距">
+                                <input class="mini-input" id="cover-letter-spacing" type="number" min="-0.12" max="0.3" step="0.01" value="-0.04" aria-label="字距">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <div style="width:100%;">
+                            <p class="tool-label">文字颜色</p>
+                            <input class="color-input" id="cover-text-color" type="color" value="#101114" aria-label="文字颜色">
                         </div>
                     </div>
                 </div>
@@ -908,7 +1195,7 @@
 
                                 <div class="note-cover-preview" id="note-cover-preview">
                                     <img id="note-cover-image" alt="封面预览">
-                                    <div class="overlay-preview-text" id="note-overlay-text"></div>
+                                    <div class="cover-layer-stage" id="note-layer-stage"></div>
                                 </div>
 
                                 <div class="note-body">
@@ -954,12 +1241,32 @@
     const coverCtx = coverCanvas.getContext("2d", { willReadFrequently: true });
     const maskCanvas = document.getElementById("cover-mask-canvas");
     const maskCtx = maskCanvas.getContext("2d", { willReadFrequently: true });
-    const coverText = document.getElementById("cover-text");
+    const coverLayerStage = document.getElementById("cover-layer-stage");
+    const coverLayerImageInput = document.getElementById("cover-layer-image-input");
+    const addTextLayerBtn = document.getElementById("add-text-layer-btn");
+    const addImageLayerBtn = document.getElementById("add-image-layer-btn");
+    const moveLayerUpBtn = document.getElementById("move-layer-up-btn");
+    const moveLayerDownBtn = document.getElementById("move-layer-down-btn");
+    const deleteLayerBtn = document.getElementById("delete-layer-btn");
+    const layerList = document.getElementById("layer-list");
+    const layerCount = document.getElementById("layer-count");
+    const noteLayerStage = document.getElementById("note-layer-stage");
     const cleanupDot = document.getElementById("cleanup-dot");
     const cleanupStatus = document.getElementById("cleanup-status");
     const brushSizeInput = document.getElementById("brush-size");
     const brushSizeValue = document.getElementById("brush-size-value");
     const retouchToggle = document.getElementById("retouch-toggle");
+    const coverFontSelect = document.getElementById("cover-font-select");
+    const coverFontSizeInput = document.getElementById("cover-font-size");
+    const coverBoldBtn = document.getElementById("cover-bold-btn");
+    const coverItalicBtn = document.getElementById("cover-italic-btn");
+    const coverUnderlineBtn = document.getElementById("cover-underline-btn");
+    const coverAlignLeftBtn = document.getElementById("cover-align-left");
+    const coverAlignCenterBtn = document.getElementById("cover-align-center");
+    const coverAlignRightBtn = document.getElementById("cover-align-right");
+    const coverLineHeightInput = document.getElementById("cover-line-height");
+    const coverLetterSpacingInput = document.getElementById("cover-letter-spacing");
+    const coverTextColorInput = document.getElementById("cover-text-color");
     const workTitleInput = document.getElementById("work-title");
     const workBodyInput = document.getElementById("work-body");
     const contentCounter = document.getElementById("content-counter");
@@ -980,7 +1287,18 @@
         editingText: false,
         dragOffsetX: 0,
         dragOffsetY: 0,
-        strokePoints: []
+        strokePoints: [],
+        layers: [],
+        selectedLayerId: "",
+        fontFamily: "PingFang SC, Hiragino Sans GB, Microsoft Yahei, sans-serif",
+        fontSize: 58,
+        fontWeight: 500,
+        fontStyle: "normal",
+        textDecoration: "none",
+        textAlign: "left",
+        lineHeight: 1.18,
+        letterSpacing: -0.04,
+        color: "#101114"
     };
 
     const discoverSeedCards = [
@@ -1036,6 +1354,140 @@
 
     function getCanvasDataUrl() {
         return coverCanvas.toDataURL("image/png");
+    }
+
+    function createLayerId() {
+        return `layer-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+
+    function createTextLayer(overrides = {}) {
+        return {
+            id: createLayerId(),
+            type: "text",
+            name: overrides.name || `文字 ${coverState.layers.filter((item) => item.type === "text").length + 1}`,
+            text: overrides.text || "我的叔叔游乐",
+            x: overrides.x ?? 44,
+            y: overrides.y ?? 120,
+            width: overrides.width ?? 320,
+            fontFamily: overrides.fontFamily ?? coverState.fontFamily,
+            fontSize: overrides.fontSize ?? coverState.fontSize,
+            fontWeight: overrides.fontWeight ?? coverState.fontWeight,
+            fontStyle: overrides.fontStyle ?? coverState.fontStyle,
+            textDecoration: overrides.textDecoration ?? coverState.textDecoration,
+            textAlign: overrides.textAlign ?? coverState.textAlign,
+            lineHeight: overrides.lineHeight ?? coverState.lineHeight,
+            letterSpacing: overrides.letterSpacing ?? coverState.letterSpacing,
+            color: overrides.color ?? coverState.color
+        };
+    }
+
+    function createImageLayer(dataUrl, overrides = {}) {
+        return {
+            id: createLayerId(),
+            type: "image",
+            name: overrides.name || `图片 ${coverState.layers.filter((item) => item.type === "image").length + 1}`,
+            src: dataUrl,
+            x: overrides.x ?? 80,
+            y: overrides.y ?? 160,
+            width: overrides.width ?? 240,
+            height: overrides.height ?? 240
+        };
+    }
+
+    function getSelectedLayer() {
+        return coverState.layers.find((layer) => layer.id === coverState.selectedLayerId) || null;
+    }
+
+    function selectLayer(layerId) {
+        coverState.selectedLayerId = layerId;
+        renderCoverLayers();
+        renderLayerList();
+        syncCoverEditorControls();
+        syncPreviews();
+    }
+
+    function updateLayerCount() {
+        layerCount.textContent = `${coverState.layers.length} / 10 图层`;
+    }
+
+    function applyTextLayerStyles(element, layer) {
+        element.style.fontFamily = layer.fontFamily;
+        element.style.fontSize = `${layer.fontSize}px`;
+        element.style.fontWeight = String(layer.fontWeight);
+        element.style.fontStyle = layer.fontStyle;
+        element.style.textDecoration = layer.textDecoration;
+        element.style.textAlign = layer.textAlign;
+        element.style.lineHeight = String(layer.lineHeight);
+        element.style.letterSpacing = `${layer.letterSpacing}em`;
+        element.style.color = layer.color;
+        element.style.width = `${layer.width}px`;
+    }
+
+    function renderCoverLayers() {
+        coverLayerStage.innerHTML = "";
+
+        coverState.layers.forEach((layer) => {
+            const layerNode = document.createElement("div");
+            layerNode.className = `cover-layer ${layer.type}-layer`;
+            layerNode.dataset.layerId = layer.id;
+            layerNode.style.left = `${layer.x}px`;
+            layerNode.style.top = `${layer.y}px`;
+            layerNode.style.zIndex = String(10 + coverState.layers.indexOf(layer));
+
+            if (layer.id === coverState.selectedLayerId) {
+                layerNode.classList.add("selected");
+            }
+
+            if (layer.type === "text") {
+                layerNode.contentEditable = "true";
+                layerNode.spellcheck = false;
+                layerNode.textContent = layer.text;
+                applyTextLayerStyles(layerNode, layer);
+            } else {
+                layerNode.style.width = `${layer.width}px`;
+                layerNode.style.height = `${layer.height}px`;
+                const img = document.createElement("img");
+                img.src = layer.src;
+                img.alt = layer.name;
+                layerNode.appendChild(img);
+            }
+
+            coverLayerStage.appendChild(layerNode);
+        });
+    }
+
+    function renderLayerList() {
+        updateLayerCount();
+        layerList.innerHTML = "";
+
+        [...coverState.layers].reverse().forEach((layer) => {
+            const item = document.createElement("button");
+            item.type = "button";
+            item.className = "layer-item" + (layer.id === coverState.selectedLayerId ? " active" : "");
+            item.dataset.layerId = layer.id;
+            item.innerHTML = `
+                <div class="layer-item-main">
+                    <div class="layer-item-title">${escapeHtml(layer.name)}</div>
+                    <div class="layer-item-meta">${layer.type === "text" ? "文字图层" : "图片图层"}</div>
+                </div>
+                <div class="layer-item-meta">#${coverState.layers.indexOf(layer) + 1}</div>
+            `;
+            layerList.appendChild(item);
+        });
+    }
+
+    function clampLayerPosition(layer, x, y) {
+        const stageWidth = coverMakerCard.offsetWidth;
+        const stageHeight = coverMakerCard.offsetHeight;
+        const widthPx = layer.type === "text" ? Math.min(layer.width, stageWidth - 20) : layer.width;
+        const heightPx = layer.type === "text"
+            ? 120
+            : layer.height;
+
+        return {
+            x: Math.max(10, Math.min(x, stageWidth - widthPx - 10)),
+            y: Math.max(10, Math.min(y, stageHeight - heightPx - 70))
+        };
     }
 
     function resetCoverToDefault() {
@@ -1572,80 +2024,251 @@
         brushSizeValue.textContent = brushSizeInput.value;
     });
 
-    function centerTextInit() {
-        const defaultTop = Math.max(100, coverMakerCard.offsetHeight * 0.13);
-        const defaultLeft = Math.max(36, coverMakerCard.offsetWidth * 0.08);
-        coverText.style.top = `${defaultTop}px`;
-        coverText.style.left = `${defaultLeft}px`;
-        syncPreviews();
-    }
-
-    function clampCoverTextPosition(nextLeft, nextTop) {
-        const maxLeft = coverMakerCard.offsetWidth - coverText.offsetWidth - 20;
-        const maxTop = coverMakerCard.offsetHeight - coverText.offsetHeight - 94;
-        return {
-            left: Math.max(20, Math.min(nextLeft, maxLeft)),
-            top: Math.max(20, Math.min(nextTop, maxTop))
-        };
-    }
-
-    coverText.addEventListener("focus", () => {
-        coverState.editingText = true;
-        coverText.classList.add("editing");
-    });
-
-    coverText.addEventListener("blur", () => {
-        coverState.editingText = false;
-        coverText.classList.remove("editing");
-        syncPreviews();
-    });
-
-    coverText.addEventListener("pointerdown", (event) => {
-        if (coverState.editingText || event.target !== coverText) {
+    function updateSelectedTextLayer(patch) {
+        const layer = getSelectedLayer();
+        if (!layer || layer.type !== "text") {
             return;
         }
 
-        const rect = coverText.getBoundingClientRect();
+        Object.assign(layer, patch);
+        renderCoverLayers();
+        renderLayerList();
+        syncCoverEditorControls();
+        syncPreviews();
+    }
+
+    coverFontSelect.addEventListener("change", () => {
+        updateSelectedTextLayer({ fontFamily: coverFontSelect.value });
+    });
+
+    coverFontSizeInput.addEventListener("input", () => {
+        updateSelectedTextLayer({ fontSize: Math.max(24, Math.min(120, Number(coverFontSizeInput.value) || 58)) });
+    });
+
+    coverBoldBtn.addEventListener("click", () => {
+        const layer = getSelectedLayer();
+        if (!layer || layer.type !== "text") return;
+        updateSelectedTextLayer({ fontWeight: Number(layer.fontWeight) >= 700 ? 500 : 700 });
+    });
+
+    coverItalicBtn.addEventListener("click", () => {
+        const layer = getSelectedLayer();
+        if (!layer || layer.type !== "text") return;
+        updateSelectedTextLayer({ fontStyle: layer.fontStyle === "italic" ? "normal" : "italic" });
+    });
+
+    coverUnderlineBtn.addEventListener("click", () => {
+        const layer = getSelectedLayer();
+        if (!layer || layer.type !== "text") return;
+        updateSelectedTextLayer({ textDecoration: layer.textDecoration.includes("underline") ? "none" : "underline" });
+    });
+
+    coverAlignLeftBtn.addEventListener("click", () => {
+        updateSelectedTextLayer({ textAlign: "left" });
+    });
+
+    coverAlignCenterBtn.addEventListener("click", () => {
+        updateSelectedTextLayer({ textAlign: "center" });
+    });
+
+    coverAlignRightBtn.addEventListener("click", () => {
+        updateSelectedTextLayer({ textAlign: "right" });
+    });
+
+    coverLineHeightInput.addEventListener("input", () => {
+        updateSelectedTextLayer({ lineHeight: Math.max(0.8, Math.min(2.4, Number(coverLineHeightInput.value) || 1.18)) });
+    });
+
+    coverLetterSpacingInput.addEventListener("input", () => {
+        updateSelectedTextLayer({ letterSpacing: Math.max(-0.12, Math.min(0.3, Number(coverLetterSpacingInput.value) || 0)) });
+    });
+
+    coverTextColorInput.addEventListener("input", () => {
+        updateSelectedTextLayer({ color: coverTextColorInput.value });
+    });
+    document.getElementById("cover-avatar").addEventListener("input", syncPreviews);
+    document.getElementById("cover-author").addEventListener("input", syncPreviews);
+
+    coverLayerStage.addEventListener("pointerdown", (event) => {
+        if (coverState.retouchEnabled) {
+            return;
+        }
+
+        const node = event.target.closest(".cover-layer");
+        if (!node) {
+            return;
+        }
+
+        const layer = coverState.layers.find((item) => item.id === node.dataset.layerId);
+        if (!layer) {
+            return;
+        }
+
+        selectLayer(layer.id);
+
+        if (layer.type === "text" && node.classList.contains("editing")) {
+            return;
+        }
+
+        const rect = node.getBoundingClientRect();
         coverState.dragging = true;
         coverState.dragOffsetX = event.clientX - rect.left;
         coverState.dragOffsetY = event.clientY - rect.top;
-        coverText.setPointerCapture(event.pointerId);
+        node.setPointerCapture(event.pointerId);
         event.preventDefault();
     });
 
-    coverText.addEventListener("pointermove", (event) => {
+    coverLayerStage.addEventListener("pointermove", (event) => {
         if (!coverState.dragging) {
             return;
         }
-
+        const layer = getSelectedLayer();
+        if (!layer) {
+            return;
+        }
         const parentRect = coverMakerCard.getBoundingClientRect();
-        const nextLeft = event.clientX - parentRect.left - coverState.dragOffsetX;
-        const nextTop = event.clientY - parentRect.top - coverState.dragOffsetY;
-        const position = clampCoverTextPosition(nextLeft, nextTop);
-        coverText.style.left = `${position.left}px`;
-        coverText.style.top = `${position.top}px`;
+        const position = clampLayerPosition(
+            layer,
+            event.clientX - parentRect.left - coverState.dragOffsetX,
+            event.clientY - parentRect.top - coverState.dragOffsetY
+        );
+        layer.x = position.x;
+        layer.y = position.y;
+        renderCoverLayers();
+        renderLayerList();
         syncPreviews();
     });
 
-    coverText.addEventListener("pointerup", (event) => {
-        if (!coverState.dragging) {
+    coverLayerStage.addEventListener("pointerup", () => {
+        coverState.dragging = false;
+    });
+
+    coverLayerStage.addEventListener("dblclick", (event) => {
+        const node = event.target.closest(".cover-layer.text-layer");
+        if (!node) return;
+        node.classList.add("editing");
+        node.focus();
+        document.getSelection()?.selectAllChildren(node);
+    });
+
+    coverLayerStage.addEventListener("focusin", (event) => {
+        const node = event.target.closest(".cover-layer.text-layer");
+        if (!node) return;
+        coverState.editingText = true;
+        node.classList.add("editing");
+    });
+
+    coverLayerStage.addEventListener("focusout", (event) => {
+        const node = event.target.closest(".cover-layer.text-layer");
+        if (!node) return;
+        coverState.editingText = false;
+        node.classList.remove("editing");
+    });
+
+    coverLayerStage.addEventListener("input", (event) => {
+        const node = event.target.closest(".cover-layer.text-layer");
+        if (!node) return;
+        const layer = coverState.layers.find((item) => item.id === node.dataset.layerId);
+        if (!layer) return;
+        layer.text = node.innerText;
+        layer.name = (node.innerText.trim() || "文字图层").slice(0, 12);
+        renderLayerList();
+        syncPreviews();
+    });
+
+    layerList.addEventListener("click", (event) => {
+        const item = event.target.closest(".layer-item");
+        if (!item) return;
+        selectLayer(item.dataset.layerId);
+    });
+
+    noteLayerStage.addEventListener("click", (event) => {
+        const node = event.target.closest(".cover-layer");
+        if (!node) return;
+        selectLayer(node.dataset.layerId);
+    });
+
+    noteLayerStage.addEventListener("input", (event) => {
+        const node = event.target.closest(".cover-layer.text-layer");
+        if (!node) return;
+        const layer = coverState.layers.find((item) => item.id === node.dataset.layerId);
+        if (!layer) return;
+        layer.text = node.innerText;
+        layer.name = (node.innerText.trim() || "文字图层").slice(0, 12);
+        renderLayerList();
+    });
+
+    noteLayerStage.addEventListener("focusout", (event) => {
+        const node = event.target.closest(".cover-layer.text-layer");
+        if (!node) return;
+        syncPreviews();
+    });
+
+    addTextLayerBtn.addEventListener("click", () => {
+        if (coverState.layers.length >= 10) {
+            alert("最多支持 10 个图层");
             return;
         }
-        coverState.dragging = false;
-        coverText.releasePointerCapture(event.pointerId);
+        const layer = createTextLayer({
+            text: "新文字",
+            x: 50 + coverState.layers.length * 10,
+            y: 100 + coverState.layers.length * 10
+        });
+        coverState.layers.push(layer);
+        selectLayer(layer.id);
+    });
+
+    addImageLayerBtn.addEventListener("click", () => {
+        if (coverState.layers.length >= 10) {
+            alert("最多支持 10 个图层");
+            return;
+        }
+        coverLayerImageInput.click();
+    });
+
+    coverLayerImageInput.addEventListener("change", () => {
+        const file = coverLayerImageInput.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            const layer = createImageLayer(reader.result, {
+                x: 70 + coverState.layers.length * 10,
+                y: 130 + coverState.layers.length * 10
+            });
+            coverState.layers.push(layer);
+            selectLayer(layer.id);
+            coverLayerImageInput.value = "";
+        };
+        reader.readAsDataURL(file);
+    });
+
+    deleteLayerBtn.addEventListener("click", () => {
+        if (!coverState.selectedLayerId) return;
+        coverState.layers = coverState.layers.filter((layer) => layer.id !== coverState.selectedLayerId);
+        coverState.selectedLayerId = coverState.layers[coverState.layers.length - 1]?.id || "";
+        renderCoverLayers();
+        renderLayerList();
+        syncCoverEditorControls();
         syncPreviews();
     });
 
-    coverText.addEventListener("dblclick", () => {
-        coverState.editingText = true;
-        coverText.classList.add("editing");
-        coverText.focus();
-        document.getSelection()?.selectAllChildren(coverText);
+    moveLayerUpBtn.addEventListener("click", () => {
+        const index = coverState.layers.findIndex((layer) => layer.id === coverState.selectedLayerId);
+        if (index < 0 || index === coverState.layers.length - 1) return;
+        [coverState.layers[index], coverState.layers[index + 1]] = [coverState.layers[index + 1], coverState.layers[index]];
+        renderCoverLayers();
+        renderLayerList();
+        syncPreviews();
     });
 
-    coverText.addEventListener("input", syncPreviews);
-    document.getElementById("cover-avatar").addEventListener("input", syncPreviews);
-    document.getElementById("cover-author").addEventListener("input", syncPreviews);
+    moveLayerDownBtn.addEventListener("click", () => {
+        const index = coverState.layers.findIndex((layer) => layer.id === coverState.selectedLayerId);
+        if (index <= 0) return;
+        [coverState.layers[index], coverState.layers[index - 1]] = [coverState.layers[index - 1], coverState.layers[index]];
+        renderCoverLayers();
+        renderLayerList();
+        syncPreviews();
+    });
 
     workTitleInput.addEventListener("input", syncPreviews);
     workBodyInput.addEventListener("input", syncPreviews);
@@ -1679,27 +2302,62 @@
         contentCounter.textContent = `${textLength} / 1000`;
     }
 
-    function getCoverPreviewState() {
-        const cardRect = coverMakerCard.getBoundingClientRect();
-        const textRect = coverText.getBoundingClientRect();
-
-        return {
-            imageDataUrl: coverState.displayImageDataUrl || getCanvasDataUrl(),
-            title: coverText.innerText.trim() || "输入封面标题",
-            author: document.getElementById("cover-author").innerText.trim() || "洱畔",
-            avatar: document.getElementById("cover-avatar").innerText.trim() || "115",
-            topRatio: (textRect.top - cardRect.top) / cardRect.height,
-            leftRatio: (textRect.left - cardRect.left) / cardRect.width,
-            widthRatio: textRect.width / cardRect.width
-        };
+    function applyCoverTextStyles() {
+        renderCoverLayers();
     }
 
-    function applyOverlayText(node, previewState, width, height, fontScale) {
-        node.textContent = previewState.title;
-        node.style.top = `${previewState.topRatio * height}px`;
-        node.style.left = `${previewState.leftRatio * width}px`;
-        node.style.width = `${previewState.widthRatio * width}px`;
-        node.style.fontSize = `${fontScale}px`;
+    function syncCoverEditorControls() {
+        const layer = getSelectedLayer();
+        const isTextLayer = !!layer && layer.type === "text";
+        const controls = [
+            coverFontSelect,
+            coverFontSizeInput,
+            coverBoldBtn,
+            coverItalicBtn,
+            coverUnderlineBtn,
+            coverAlignLeftBtn,
+            coverAlignCenterBtn,
+            coverAlignRightBtn,
+            coverLineHeightInput,
+            coverLetterSpacingInput,
+            coverTextColorInput
+        ];
+
+        controls.forEach((control) => {
+            control.disabled = !isTextLayer;
+        });
+
+        if (!isTextLayer) {
+            return;
+        }
+
+        coverFontSelect.value = layer.fontFamily;
+        coverFontSizeInput.value = String(layer.fontSize);
+        coverLineHeightInput.value = String(layer.lineHeight);
+        coverLetterSpacingInput.value = String(layer.letterSpacing);
+        coverTextColorInput.value = layer.color;
+        coverBoldBtn.classList.toggle("active", Number(layer.fontWeight) >= 700);
+        coverItalicBtn.classList.toggle("active", layer.fontStyle === "italic");
+        coverUnderlineBtn.classList.toggle("active", layer.textDecoration.includes("underline"));
+        coverAlignLeftBtn.classList.toggle("active", layer.textAlign === "left");
+        coverAlignCenterBtn.classList.toggle("active", layer.textAlign === "center");
+        coverAlignRightBtn.classList.toggle("active", layer.textAlign === "right");
+    }
+
+    function getCoverPreviewState() {
+        return {
+            imageDataUrl: coverState.displayImageDataUrl || getCanvasDataUrl(),
+            author: document.getElementById("cover-author").innerText.trim() || "洱畔",
+            avatar: document.getElementById("cover-avatar").innerText.trim() || "115",
+            title: (coverState.layers.findLast?.((layer) => layer.type === "text") || [...coverState.layers].reverse().find((layer) => layer.type === "text"))?.text?.trim() || "输入封面标题",
+            layers: coverState.layers.map((layer) => ({
+                ...layer,
+                xRatio: layer.x / coverMakerCard.offsetWidth,
+                yRatio: layer.y / coverMakerCard.offsetHeight,
+                widthRatio: (layer.width || 0) / coverMakerCard.offsetWidth,
+                heightRatio: (layer.height || 0) / coverMakerCard.offsetHeight
+            }))
+        };
     }
 
     function updateNotePreview(previewState) {
@@ -1710,7 +2368,50 @@
 
         const coverImage = document.getElementById("note-cover-image");
         coverImage.src = previewState.imageDataUrl;
-        applyOverlayText(document.getElementById("note-overlay-text"), previewState, coverImage.parentElement.clientWidth, coverImage.parentElement.clientHeight, 25);
+        renderPreviewLayers(document.getElementById("note-layer-stage"), previewState.layers, coverImage.parentElement.clientWidth, coverImage.parentElement.clientHeight);
+    }
+
+    function renderPreviewLayers(container, layers, width, height) {
+        container.innerHTML = "";
+
+        layers.forEach((layer) => {
+            const node = document.createElement("div");
+            node.className = `cover-layer ${layer.type}-layer overlay-preview-text`;
+            node.dataset.layerId = layer.id;
+            const safeLeft = Math.max(0, Math.min(layer.xRatio * width, width - 20));
+            const safeTop = Math.max(0, Math.min(layer.yRatio * height, height - 20));
+            node.style.left = `${safeLeft}px`;
+            node.style.top = `${safeTop}px`;
+            node.style.zIndex = String(10 + layers.indexOf(layer));
+            node.style.maxWidth = `${width - safeLeft}px`;
+            node.style.maxHeight = `${height - safeTop}px`;
+            node.style.overflow = "hidden";
+
+            if (layer.type === "text") {
+                node.textContent = layer.text;
+                node.style.width = `${Math.min(layer.widthRatio * width, width - safeLeft)}px`;
+                node.style.fontFamily = layer.fontFamily;
+                node.style.fontSize = `${layer.fontSize * (width / coverMakerCard.offsetWidth)}px`;
+                node.style.fontWeight = String(layer.fontWeight);
+                node.style.fontStyle = layer.fontStyle;
+                node.style.textDecoration = layer.textDecoration;
+                node.style.textAlign = layer.textAlign;
+                node.style.lineHeight = String(layer.lineHeight);
+                node.style.letterSpacing = `${layer.letterSpacing}em`;
+                node.style.color = layer.color;
+                node.style.whiteSpace = "pre-wrap";
+                node.contentEditable = container.id === "note-layer-stage" ? "true" : "false";
+            } else {
+                node.style.width = `${Math.min(layer.widthRatio * width, width - safeLeft)}px`;
+                node.style.height = `${Math.min(layer.heightRatio * height, height - safeTop)}px`;
+                const img = document.createElement("img");
+                img.src = layer.src;
+                img.alt = layer.name;
+                node.appendChild(img);
+            }
+
+            container.appendChild(node);
+        });
     }
 
     function createDiscoverCard(cardData, previewState, isDynamic) {
@@ -1718,7 +2419,7 @@
             ? `
                 <div class="discover-cover">
                     <img src="${previewState.imageDataUrl}" alt="封面预览">
-                    <div class="overlay-preview-text" style="top:${previewState.topRatio * 100}%;left:${previewState.leftRatio * 100}%;width:${previewState.widthRatio * 100}%;font-size:18px;">${escapeHtml(previewState.title).replace(/\n/g, "<br>")}</div>
+                    <div class="cover-layer-stage discover-layer-stage" data-discover-layers="true"></div>
                 </div>
             `
             : `
@@ -1762,6 +2463,12 @@
         grid.innerHTML = cards
             .map((card, index) => createDiscoverCard(card, previewState, index === 0))
             .join("");
+
+        const discoverLayerStage = grid.querySelector("[data-discover-layers='true']");
+        if (discoverLayerStage) {
+            const cover = discoverLayerStage.parentElement;
+            renderPreviewLayers(discoverLayerStage, previewState.layers, cover.clientWidth, cover.clientHeight);
+        }
     }
 
     function syncPreviews() {
@@ -1854,7 +2561,11 @@
     window.addEventListener("load", () => {
         drawDefaultBackground();
         coverState.displayImageDataUrl = getCanvasDataUrl();
-        centerTextInit();
+        coverState.layers = [];
+        coverState.selectedLayerId = "";
+        applyCoverTextStyles();
+        syncCoverEditorControls();
+        renderLayerList();
         syncPreviews();
     });
 </script>
