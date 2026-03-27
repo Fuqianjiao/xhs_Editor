@@ -226,6 +226,26 @@
         z-index: 3;
     }
 
+    .drag-guide {
+        position: absolute;
+        background: rgba(59, 130, 246, 0.55);
+        pointer-events: none;
+        z-index: 2100;
+        display: none;
+    }
+
+    .drag-guide.vertical {
+        top: 0;
+        bottom: 0;
+        width: 1px;
+    }
+
+    .drag-guide.horizontal {
+        left: 0;
+        right: 0;
+        height: 1px;
+    }
+
     .cover-layer {
         position: absolute;
         cursor: move;
@@ -665,6 +685,7 @@
     .editor-content .panel-scroll {
         display: flex;
         flex-direction: column;
+        position: relative;
     }
 
     .content-title-input {
@@ -700,6 +721,12 @@
         margin: 14px 0 6px;
     }
 
+    .emoji-suggest-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
     .emoji-label {
         color: #9aa1ac;
         font-size: 13px;
@@ -722,6 +749,24 @@
         border-color: #cbd5e1;
         background: #f8fafc;
         transform: translateY(-1px);
+    }
+
+    #emoji-chip-list {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .emoji-switch {
+        border: 1px solid #e5e7eb;
+        background: #fff;
+        color: #64748b;
+        border-radius: 999px;
+        padding: 5px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
     }
 
     .content-body-input {
@@ -1059,6 +1104,29 @@
         background: #eef2f7;
     }
 
+    .bg-carousel-indicator {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        min-height: 18px;
+    }
+
+    .carousel-dot {
+        width: 8px;
+        height: 8px;
+        border: none;
+        border-radius: 999px;
+        background: #cbd5e1;
+        cursor: pointer;
+        padding: 0;
+    }
+
+    .carousel-dot.active {
+        width: 18px;
+        background: #2563eb;
+    }
+
     .discover-info {
         padding: 10px 10px 12px;
     }
@@ -1289,11 +1357,14 @@
                 <div class="control-card">
                     <h3 class="control-title">背景处理</h3>
                     <div class="control-row">
-                        <button class="btn-sys" type="button" onclick="document.getElementById('cover-bg-input').click()">上传背景图</button>
-                        <input type="file" id="cover-bg-input" accept="image/*" onchange="loadCoverBg(this)">
+                        <button class="btn-sys" type="button" onclick="document.getElementById('cover-bg-input').click()">上传背景图（最多9张）</button>
+                        <input type="file" id="cover-bg-input" accept="image/*" multiple onchange="loadCoverBg(this)">
                         <button class="btn-sys" type="button" onclick="runAutoCleanup()">重新自动去字</button>
                         <button class="btn-sys" type="button" onclick="restoreOriginalUpload()">恢复原图</button>
                         <button class="btn-sys" type="button" onclick="resetCoverToDefault()">恢复默认底图</button>
+                    </div>
+                    <div class="control-row">
+                        <div class="bg-carousel-indicator" id="bg-carousel-indicator"></div>
                     </div>
                     <div class="control-row">
                         <button class="btn-sys btn-ghost" id="retouch-toggle" type="button" onclick="toggleRetouchMode()">开启魔法笔刷</button>
@@ -1323,14 +1394,11 @@
                 <input type="text" class="content-title-input" id="work-title" maxlength="24" placeholder="填写标题会有更多赞哦" value="我的叔叔游乐">
 
                 <div class="emoji-suggest" id="emoji-suggest">
-                    <span class="emoji-label">推荐 emoji</span>
-                    <button class="emoji-chip" type="button" data-emoji="✨">✨</button>
-                    <button class="emoji-chip" type="button" data-emoji="🌿">🌿</button>
-                    <button class="emoji-chip" type="button" data-emoji="💫">💫</button>
-                    <button class="emoji-chip" type="button" data-emoji="🎧">🎧</button>
-                    <button class="emoji-chip" type="button" data-emoji="📖">📖</button>
-                    <button class="emoji-chip" type="button" data-emoji="🫧">🫧</button>
-                    <button class="emoji-chip" type="button" data-emoji="☁️">☁️</button>
+                    <div class="emoji-suggest-head">
+                        <span class="emoji-label" id="emoji-label">推荐 emoji</span>
+                        <button class="emoji-switch" type="button" id="emoji-switch-btn">换一组</button>
+                    </div>
+                    <div id="emoji-chip-list"></div>
                 </div>
 
                 <div class="content-meta">
@@ -1374,6 +1442,7 @@
                                         <img id="note-cover-image" alt="封面预览">
                                         <div class="cover-layer-stage" id="note-layer-stage"></div>
                                     </div>
+                                    <div class="bg-carousel-indicator" id="note-cover-indicator"></div>
 
                                     <div class="note-body">
                                         <h3 class="note-title-preview" id="note-title-preview"></h3>
@@ -1464,12 +1533,18 @@
     const coverLineHeightInput = document.getElementById("cover-line-height");
     const coverLetterSpacingInput = document.getElementById("cover-letter-spacing");
     const coverTextColorInput = document.getElementById("cover-text-color");
+    const bgCarouselIndicator = document.getElementById("bg-carousel-indicator");
+    const noteCoverIndicator = document.getElementById("note-cover-indicator");
     const workTitleInput = document.getElementById("work-title");
     const workBodyInput = document.getElementById("work-body");
     const contentCounter = document.getElementById("content-counter");
     const emojiSuggest = document.getElementById("emoji-suggest");
+    const emojiLabel = document.getElementById("emoji-label");
+    const emojiSwitchBtn = document.getElementById("emoji-switch-btn");
+    const emojiChipList = document.getElementById("emoji-chip-list");
     const previewContents = document.querySelectorAll(".preview-content");
     const switchTabs = document.querySelectorAll(".switch-tab");
+    const editorContentScroll = document.querySelector(".editor-content .panel-scroll");
 
     const coverState = {
         mode: "default",
@@ -1478,15 +1553,31 @@
         cleanedImageDataUrl: "",
         displayImageDataUrl: "",
         blurredImageDataUrl: "",
+        backgroundEntries: [],
+        currentBackgroundIndex: 0,
         retouchEnabled: false,
         isMaskPainting: false,
         dragging: false,
+        isDragging: false,
+        dragTargetId: "",
+        dragStartCanvasX: 0,
+        dragStartCanvasY: 0,
+        dragStartObjX: 0,
+        dragStartObjY: 0,
+        dragStartChildren: null,
+        dragHasMoved: false,
+        dragRafPending: false,
+        dragDirty: false,
+        dragGuideX: null,
+        dragGuideY: null,
         transforming: false,
         transformHandle: "",
         transformStart: null,
         editingText: false,
         dragOffsetX: 0,
         dragOffsetY: 0,
+        historyStack: [],
+        historyIndex: -1,
         strokePoints: [],
         layers: [],
         selectedLayerId: "",
@@ -1524,6 +1615,15 @@
             palette: "linear-gradient(135deg, #d7e3f4, #f3d9d1)"
         }
     ];
+
+    const EMOJI_MAX_VISIBLE = 7;
+    const emojiPools = {
+        title: ["✨", "🔥", "💡", "🎯", "📌", "🌈", "💫", "✅", "⭐", "🧠", "📖", "🪄", "🎬", "📝"],
+        body: ["🌿", "📖", "🎧", "☁️", "🫧", "🕯️", "🌙", "🍵", "💭", "🧵", "🧩", "💬", "📷", "🪴"],
+        common: ["✨", "🌿", "💫", "🎧", "📖", "🫧", "☁️", "🔥", "💡", "🎯", "🌈", "✅", "⭐", "📝"]
+    };
+    let activeEmojiTarget = "title";
+    let emojiOffsetMap = { title: 0, body: 0, common: 0 };
 
     function drawDefaultBackground() {
         const gradient = coverCtx.createLinearGradient(0, 0, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
@@ -1578,7 +1678,8 @@
             lineHeight: overrides.lineHeight ?? coverState.lineHeight,
             letterSpacing: overrides.letterSpacing ?? coverState.letterSpacing,
             color: overrides.color ?? coverState.color,
-            rotation: overrides.rotation ?? 0
+            rotation: overrides.rotation ?? 0,
+            locked: overrides.locked ?? false
         };
         syncLayerVector(layer);
         return layer;
@@ -1594,7 +1695,8 @@
             y: overrides.y ?? 160,
             width: overrides.width ?? 240,
             height: overrides.height ?? 240,
-            rotation: overrides.rotation ?? 0
+            rotation: overrides.rotation ?? 0,
+            locked: overrides.locked ?? false
         };
         syncLayerVector(layer);
         return layer;
@@ -1615,6 +1717,75 @@
     function getSelectedLayer() {
         return coverState.layers.find((layer) => layer.id === coverState.selectedLayerId) || null;
     }
+
+    function refreshCoverEditor({ controls = false } = {}) {
+        renderCoverLayers();
+        renderLayerList();
+        if (controls) {
+            syncCoverEditorControls();
+        }
+        syncPreviews();
+    }
+
+    const CoverHistory = {
+        createLayerSnapshot(layer) {
+            return JSON.parse(JSON.stringify(layer));
+        },
+        snapshotState() {
+            return {
+                layers: coverState.layers.map((layer) => this.createLayerSnapshot(layer)),
+                selectedLayerId: coverState.selectedLayerId
+            };
+        },
+        restoreState(snapshot) {
+            if (!snapshot) {
+                return;
+            }
+            coverState.layers = (snapshot.layers || []).map((layer) => this.createLayerSnapshot(layer));
+            coverState.selectedLayerId = snapshot.selectedLayerId || "";
+            if (coverState.selectedLayerId && !coverState.layers.some((layer) => layer.id === coverState.selectedLayerId)) {
+                coverState.selectedLayerId = coverState.layers[coverState.layers.length - 1]?.id || "";
+            }
+            refreshCoverEditor({ controls: true });
+        },
+        sameState(a, b) {
+            if (!a || !b) {
+                return false;
+            }
+            return JSON.stringify(a) === JSON.stringify(b);
+        },
+        push() {
+            const snapshot = this.snapshotState();
+            const previous = coverState.historyStack[coverState.historyIndex];
+            if (this.sameState(snapshot, previous)) {
+                return;
+            }
+            if (coverState.historyIndex < coverState.historyStack.length - 1) {
+                coverState.historyStack = coverState.historyStack.slice(0, coverState.historyIndex + 1);
+            }
+            coverState.historyStack.push(snapshot);
+            if (coverState.historyStack.length > 100) {
+                coverState.historyStack.shift();
+            }
+            coverState.historyIndex = coverState.historyStack.length - 1;
+        },
+        undo() {
+            if (coverState.historyIndex <= 0) {
+                return false;
+            }
+            coverState.historyIndex -= 1;
+            this.restoreState(coverState.historyStack[coverState.historyIndex]);
+            return true;
+        },
+        redo() {
+            if (coverState.historyIndex >= coverState.historyStack.length - 1) {
+                return false;
+            }
+            coverState.historyIndex += 1;
+            this.restoreState(coverState.historyStack[coverState.historyIndex]);
+            return true;
+        }
+    };
 
     function selectLayer(layerId) {
         coverState.selectedLayerId = layerId;
@@ -1725,6 +1896,23 @@
             coverLayerStage.appendChild(layerNode);
         });
 
+        const verticalGuide = document.createElement("div");
+        verticalGuide.className = "drag-guide vertical";
+        verticalGuide.dataset.dragGuide = "vertical";
+        if (coverState.dragGuideX != null) {
+            verticalGuide.style.display = "block";
+            verticalGuide.style.left = `${coverState.dragGuideX}px`;
+        }
+        const horizontalGuide = document.createElement("div");
+        horizontalGuide.className = "drag-guide horizontal";
+        horizontalGuide.dataset.dragGuide = "horizontal";
+        if (coverState.dragGuideY != null) {
+            horizontalGuide.style.display = "block";
+            horizontalGuide.style.top = `${coverState.dragGuideY}px`;
+        }
+        coverLayerStage.appendChild(verticalGuide);
+        coverLayerStage.appendChild(horizontalGuide);
+
         renderCoverTransformOverlay();
     }
 
@@ -1770,7 +1958,279 @@
         };
     }
 
+    const LayerGeometry = {
+        getLayerType(layer) {
+            return String(layer?.type || "").toUpperCase();
+        },
+        isTextType(layer) {
+            const type = this.getLayerType(layer);
+            return type === "TEXT" || type === "RICH_TEXT";
+        },
+        isImageType(layer) {
+            return this.getLayerType(layer) === "IMAGE";
+        },
+        isGroupType(layer) {
+            return this.getLayerType(layer) === "GROUP";
+        },
+        canDragLayer(layer) {
+            if (!layer || layer.locked) {
+                return false;
+            }
+            return this.isTextType(layer) || this.isImageType(layer) || this.isGroupType(layer);
+        },
+        getTextLayerMetrics(layer) {
+            const text = String(layer.text || "");
+            const maxWidth = Math.max(1, Number(layer.width) || 1);
+            const fontSize = Math.max(1, Number(layer.fontSize) || coverState.fontSize || 58);
+            const lineHeight = Math.max(0.8, Number(layer.lineHeight) || 1.18);
+            const fontWeight = String(layer.fontWeight ?? coverState.fontWeight ?? 500);
+            const fontStyle = String(layer.fontStyle ?? coverState.fontStyle ?? "normal");
+            const fontFamily = String(layer.fontFamily ?? coverState.fontFamily);
+            const letterSpacingPx = fontSize * (Number(layer.letterSpacing) || 0);
+
+            coverCtx.save();
+            coverCtx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
+            const lines = [];
+            const rows = text.split("\n");
+            rows.forEach((row) => {
+                if (!row.length) {
+                    lines.push("");
+                    return;
+                }
+                let current = "";
+                for (const char of row) {
+                    const candidate = current + char;
+                    const glyphCount = Math.max(0, candidate.length - 1);
+                    const candidateWidth = coverCtx.measureText(candidate).width + glyphCount * letterSpacingPx;
+                    if (candidateWidth > maxWidth && current) {
+                        lines.push(current);
+                        current = char;
+                    } else {
+                        current = candidate;
+                    }
+                }
+                lines.push(current);
+            });
+            if (!lines.length) {
+                lines.push("");
+            }
+            let measuredWidth = 0;
+            lines.forEach((line) => {
+                const glyphCount = Math.max(0, line.length - 1);
+                const lineWidth = coverCtx.measureText(line).width + glyphCount * letterSpacingPx;
+                measuredWidth = Math.max(measuredWidth, lineWidth);
+            });
+            coverCtx.restore();
+
+            return {
+                width: Math.max(1, Math.min(maxWidth, measuredWidth || maxWidth * 0.4)),
+                height: Math.max(fontSize, lines.length * fontSize * lineHeight)
+            };
+        },
+        getLayerHitBounds(layer) {
+            if (this.isImageType(layer)) {
+                return {
+                    x: layer.x,
+                    y: layer.y,
+                    width: Math.max(1, Number(layer.width) || 1),
+                    height: Math.max(1, Number(layer.height) || 1)
+                };
+            }
+            if (this.isTextType(layer)) {
+                const metrics = this.getTextLayerMetrics(layer);
+                return {
+                    x: layer.x,
+                    y: layer.y,
+                    width: metrics.width,
+                    height: metrics.height
+                };
+            }
+            if (this.isGroupType(layer) && Array.isArray(layer.children) && layer.children.length) {
+                let minX = Number.POSITIVE_INFINITY;
+                let minY = Number.POSITIVE_INFINITY;
+                let maxX = Number.NEGATIVE_INFINITY;
+                let maxY = Number.NEGATIVE_INFINITY;
+                layer.children.forEach((child) => {
+                    const width = Number(child.width) || 0;
+                    const height = Number(child.height) || 0;
+                    minX = Math.min(minX, Number(child.x) || 0);
+                    minY = Math.min(minY, Number(child.y) || 0);
+                    maxX = Math.max(maxX, (Number(child.x) || 0) + width);
+                    maxY = Math.max(maxY, (Number(child.y) || 0) + height);
+                });
+                return {
+                    x: Number.isFinite(minX) ? minX : layer.x,
+                    y: Number.isFinite(minY) ? minY : layer.y,
+                    width: Math.max(1, (Number.isFinite(maxX) ? maxX : layer.x) - (Number.isFinite(minX) ? minX : layer.x)),
+                    height: Math.max(1, (Number.isFinite(maxY) ? maxY : layer.y) - (Number.isFinite(minY) ? minY : layer.y))
+                };
+            }
+            return {
+                x: layer.x,
+                y: layer.y,
+                width: Math.max(1, Number(layer.width) || 1),
+                height: Math.max(1, Number(layer.height) || 1)
+            };
+        },
+        rotatePoint(point, center, angleRad) {
+            const cos = Math.cos(angleRad);
+            const sin = Math.sin(angleRad);
+            const tx = point.x - center.x;
+            const ty = point.y - center.y;
+            return {
+                x: tx * cos - ty * sin + center.x,
+                y: tx * sin + ty * cos + center.y
+            };
+        },
+        hitTestLayerAtPoint(layer, point) {
+            const bounds = this.getLayerHitBounds(layer);
+            const center = {
+                x: bounds.x + bounds.width / 2,
+                y: bounds.y + bounds.height / 2
+            };
+            const inversePoint = this.rotatePoint(point, center, -((Number(layer.rotation) || 0) * Math.PI) / 180);
+            return inversePoint.x >= bounds.x &&
+                inversePoint.x <= bounds.x + bounds.width &&
+                inversePoint.y >= bounds.y &&
+                inversePoint.y <= bounds.y + bounds.height;
+        }
+    };
+
+    const DragController = {
+        showGuides(layer) {
+            const stageWidth = coverLayerStage.clientWidth;
+            const stageHeight = coverLayerStage.clientHeight;
+            const bounds = LayerGeometry.getLayerHitBounds(layer);
+            const centerX = bounds.x + bounds.width / 2;
+            const centerY = bounds.y + bounds.height / 2;
+            const snapDistance = 6;
+
+            const vertical = coverLayerStage.querySelector('[data-drag-guide="vertical"]');
+            const horizontal = coverLayerStage.querySelector('[data-drag-guide="horizontal"]');
+            if (!vertical || !horizontal) {
+                return;
+            }
+
+            if (Math.abs(centerX - stageWidth / 2) <= snapDistance) {
+                vertical.style.display = "block";
+                vertical.style.left = `${stageWidth / 2}px`;
+                coverState.dragGuideX = stageWidth / 2;
+            } else {
+                vertical.style.display = "none";
+                coverState.dragGuideX = null;
+            }
+
+            if (Math.abs(centerY - stageHeight / 2) <= snapDistance) {
+                horizontal.style.display = "block";
+                horizontal.style.top = `${stageHeight / 2}px`;
+                coverState.dragGuideY = stageHeight / 2;
+            } else {
+                horizontal.style.display = "none";
+                coverState.dragGuideY = null;
+            }
+        },
+        hideGuides() {
+            const vertical = coverLayerStage.querySelector('[data-drag-guide="vertical"]');
+            const horizontal = coverLayerStage.querySelector('[data-drag-guide="horizontal"]');
+            if (vertical) {
+                vertical.style.display = "none";
+            }
+            if (horizontal) {
+                horizontal.style.display = "none";
+            }
+            coverState.dragGuideX = null;
+            coverState.dragGuideY = null;
+        },
+        requestRender() {
+            if (coverState.dragRafPending) {
+                return;
+            }
+            coverState.dragRafPending = true;
+            requestAnimationFrame(() => {
+                coverState.dragRafPending = false;
+                if (!coverState.dragDirty) {
+                    return;
+                }
+                coverState.dragDirty = false;
+                refreshCoverEditor();
+            });
+        },
+        scheduleRender() {
+            coverState.dragDirty = true;
+            this.requestRender();
+        },
+        begin(layer, point) {
+            if (!LayerGeometry.canDragLayer(layer)) {
+                return false;
+            }
+            coverState.isDragging = true;
+            coverState.dragging = true;
+            coverState.dragTargetId = layer.id;
+            coverState.dragStartCanvasX = point.x;
+            coverState.dragStartCanvasY = point.y;
+            coverState.dragStartObjX = layer.x;
+            coverState.dragStartObjY = layer.y;
+            coverState.dragHasMoved = false;
+            coverState.dragStartChildren = LayerGeometry.isGroupType(layer) && Array.isArray(layer.children)
+                ? layer.children.map((child) => ({ x: Number(child.x) || 0, y: Number(child.y) || 0 }))
+                : null;
+            if (coverState.historyIndex === -1) {
+                CoverHistory.push();
+            }
+            return true;
+        },
+        apply(event) {
+            if (!coverState.isDragging) {
+                return;
+            }
+            const layer = coverState.layers.find((item) => item.id === coverState.dragTargetId);
+            if (!layer) {
+                return;
+            }
+            const point = getPointerInStage(event);
+            const dx = point.x - coverState.dragStartCanvasX;
+            const dy = point.y - coverState.dragStartCanvasY;
+            const bounded = clampLayerPosition(layer, coverState.dragStartObjX + dx, coverState.dragStartObjY + dy);
+            const appliedDx = bounded.x - coverState.dragStartObjX;
+            const appliedDy = bounded.y - coverState.dragStartObjY;
+            layer.x = bounded.x;
+            layer.y = bounded.y;
+            if (LayerGeometry.isGroupType(layer) && Array.isArray(layer.children) && Array.isArray(coverState.dragStartChildren)) {
+                layer.children.forEach((child, index) => {
+                    const start = coverState.dragStartChildren[index];
+                    if (!start) {
+                        return;
+                    }
+                    child.x = start.x + appliedDx;
+                    child.y = start.y + appliedDy;
+                });
+            }
+            syncLayerVector(layer);
+            coverState.dragHasMoved = coverState.dragHasMoved || Math.abs(appliedDx) > 0 || Math.abs(appliedDy) > 0;
+            this.showGuides(layer);
+            this.scheduleRender();
+        },
+        end() {
+            if (!coverState.isDragging) {
+                return;
+            }
+            coverState.isDragging = false;
+            coverState.dragging = false;
+            coverState.dragTargetId = "";
+            coverState.dragStartChildren = null;
+            this.hideGuides();
+            if (coverState.dragHasMoved) {
+                CoverHistory.push();
+            }
+            coverState.dragHasMoved = false;
+            refreshCoverEditor();
+        }
+    };
+
     function beginLayerTransform(layer, handle, event) {
+        if (layer.locked) {
+            return false;
+        }
         const size = getLayerRenderSize(layer);
         const stagePoint = getPointerInStage(event);
         const centerX = layer.x + size.width / 2;
@@ -1793,6 +2253,7 @@
             centerY,
             startAngle: Math.atan2(stagePoint.y - centerY, stagePoint.x - centerX)
         };
+        return true;
     }
 
     function applyLayerTransform(event) {
@@ -1887,9 +2348,12 @@
         coverState.originalImageDataUrl = "";
         coverState.cleanedImageDataUrl = "";
         coverState.blurredImageDataUrl = "";
+        coverState.backgroundEntries = [];
+        coverState.currentBackgroundIndex = 0;
         drawDefaultBackground();
         coverState.displayImageDataUrl = getCanvasDataUrl();
         document.getElementById("cover-bg-input").value = "";
+        renderBackgroundIndicators();
         updateCleanupStatus("当前使用默认底图", "");
         syncPreviews();
     }
@@ -2295,55 +2759,124 @@
         syncPreviews();
     }
 
+    function getActiveBackgroundEntry() {
+        return coverState.backgroundEntries[coverState.currentBackgroundIndex] || null;
+    }
+
+    function syncActiveBackgroundMeta() {
+        const active = getActiveBackgroundEntry();
+        coverState.originalImageDataUrl = active?.originalDataUrl || "";
+        coverState.cleanedImageDataUrl = active?.cleanedDataUrl || "";
+        coverState.blurredImageDataUrl = active?.blurredDataUrl || "";
+    }
+
+    function renderBackgroundIndicators() {
+        const entries = coverState.backgroundEntries;
+        const count = entries.length;
+        const renderDots = (container) => {
+            if (!container) return;
+            container.innerHTML = "";
+            if (!count) return;
+            entries.forEach((_, index) => {
+                const dot = document.createElement("button");
+                dot.type = "button";
+                dot.className = "carousel-dot" + (index === coverState.currentBackgroundIndex ? " active" : "");
+                dot.title = `第 ${index + 1} 张`;
+                dot.addEventListener("click", () => {
+                    switchBackground(index);
+                });
+                container.appendChild(dot);
+            });
+        };
+        renderDots(bgCarouselIndicator);
+        renderDots(noteCoverIndicator);
+    }
+
+    async function switchBackground(index) {
+        if (index < 0 || index >= coverState.backgroundEntries.length) {
+            return;
+        }
+        coverState.currentBackgroundIndex = index;
+        const active = getActiveBackgroundEntry();
+        if (active?.displayDataUrl) {
+            await renderDataUrlToCover(active.displayDataUrl);
+        }
+        syncActiveBackgroundMeta();
+        renderBackgroundIndicators();
+    }
+
     async function loadCoverBg(input) {
-        if (!input.files || !input.files[0]) {
+        if (!input.files || !input.files.length) {
+            return;
+        }
+        const existingCount = coverState.backgroundEntries.length;
+        const fileList = Array.from(input.files).slice(0, Math.max(0, 9 - existingCount));
+        if (!fileList.length) {
+            updateCleanupStatus("最多支持 9 张背景图", "warn");
+            input.value = "";
             return;
         }
 
-        const reader = new FileReader();
-        reader.onload = async function (e) {
-            const imageDataUrl = e.target.result;
-            coverState.mode = "uploaded";
-            coverState.originalImageDataUrl = imageDataUrl;
-            updateCleanupStatus("正在自动去掉原图文字...", "warn");
-
+        for (const file of fileList) {
+            const imageDataUrl = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (event) => resolve(event.target.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+            updateCleanupStatus(`正在处理背景图：${file.name}`, "warn");
             try {
                 const result = await cleanupTextFromImage(imageDataUrl);
-                coverState.cleanedImageDataUrl = result.cleanedDataUrl;
-                coverState.blurredImageDataUrl = result.blurredDataUrl;
-                await renderDataUrlToCover(result.cleanedDataUrl);
-                updateCleanupStatus("背景已自动去字，可继续用魔法笔刷修补", "ready");
+                coverState.backgroundEntries.push({
+                    originalDataUrl: imageDataUrl,
+                    cleanedDataUrl: result.cleanedDataUrl,
+                    blurredDataUrl: result.blurredDataUrl,
+                    displayDataUrl: result.cleanedDataUrl
+                });
             } catch (error) {
                 console.error("cleanup failed", error);
-                await renderDataUrlToCover(imageDataUrl);
-                updateCleanupStatus("自动去字失败，当前显示原图", "warn");
+                coverState.backgroundEntries.push({
+                    originalDataUrl: imageDataUrl,
+                    cleanedDataUrl: "",
+                    blurredDataUrl: "",
+                    displayDataUrl: imageDataUrl
+                });
             }
-        };
+        }
 
-        reader.readAsDataURL(input.files[0]);
+        coverState.mode = "uploaded";
+        coverState.currentBackgroundIndex = coverState.backgroundEntries.length - 1;
+        await switchBackground(coverState.currentBackgroundIndex);
+        updateCleanupStatus("背景已批量导入，可通过轮播指示器切换", "ready");
+        input.value = "";
     }
 
     async function runAutoCleanup() {
-        if (!coverState.originalImageDataUrl) {
+        const active = getActiveBackgroundEntry();
+        if (!active?.originalDataUrl) {
             updateCleanupStatus("还没有上传背景图", "warn");
             return;
         }
 
         updateCleanupStatus("正在重新自动去字...", "warn");
-        const result = await cleanupTextFromImage(coverState.originalImageDataUrl);
-        coverState.cleanedImageDataUrl = result.cleanedDataUrl;
-        coverState.blurredImageDataUrl = result.blurredDataUrl;
-        await renderDataUrlToCover(result.cleanedDataUrl);
+        const result = await cleanupTextFromImage(active.originalDataUrl);
+        active.cleanedDataUrl = result.cleanedDataUrl;
+        active.blurredDataUrl = result.blurredDataUrl;
+        active.displayDataUrl = result.cleanedDataUrl;
+        syncActiveBackgroundMeta();
+        await renderDataUrlToCover(active.displayDataUrl);
         updateCleanupStatus("已重新完成自动去字", "ready");
     }
 
     async function restoreOriginalUpload() {
-        if (!coverState.originalImageDataUrl) {
+        const active = getActiveBackgroundEntry();
+        if (!active?.originalDataUrl) {
             updateCleanupStatus("没有可恢复的上传原图", "warn");
             return;
         }
-
-        await renderDataUrlToCover(coverState.originalImageDataUrl);
+        active.displayDataUrl = active.originalDataUrl;
+        syncActiveBackgroundMeta();
+        await renderDataUrlToCover(active.originalDataUrl);
         updateCleanupStatus("当前显示上传原图", "warn");
     }
 
@@ -2397,7 +2930,7 @@
     });
 
     document.addEventListener("pointerup", () => {
-        coverState.dragging = false;
+        DragController.end();
         stopLayerTransform();
 
         if (coverState.retouchEnabled && retouchPointerDown && coverState.strokePoints.length) {
@@ -2405,6 +2938,10 @@
             retouchPromise = retouchPromise.then(() => {
                 healMaskedRegion();
                 coverState.displayImageDataUrl = getCanvasDataUrl();
+                const active = getActiveBackgroundEntry();
+                if (active) {
+                    active.displayDataUrl = coverState.displayImageDataUrl;
+                }
                 syncPreviews();
                 updateCleanupStatus("内容填充完成，可以继续涂抹下一块区域", "ready");
             });
@@ -2500,7 +3037,9 @@
             if (coverState.selectedLayerId !== layer.id) {
                 coverState.selectedLayerId = layer.id;
             }
-            beginLayerTransform(layer, handle.dataset.handle, event);
+            if (!beginLayerTransform(layer, handle.dataset.handle, event)) {
+                return;
+            }
             coverLayerStage.setPointerCapture(event.pointerId);
             event.preventDefault();
             return;
@@ -2508,6 +3047,14 @@
 
         const node = event.target.closest(".cover-layer");
         if (!node) {
+            const selected = getSelectedLayer();
+            if (selected && LayerGeometry.canDragLayer(selected)) {
+                const point = getPointerInStage(event);
+                if (LayerGeometry.hitTestLayerAtPoint(selected, point) && DragController.begin(selected, point)) {
+                    coverLayerStage.setPointerCapture(event.pointerId);
+                    event.preventDefault();
+                }
+            }
             return;
         }
 
@@ -2520,7 +3067,6 @@
             return;
         }
 
-        const rect = node.getBoundingClientRect();
         if (coverState.selectedLayerId !== layer.id) {
             coverState.selectedLayerId = layer.id;
             renderCoverLayers();
@@ -2528,9 +3074,13 @@
             syncCoverEditorControls();
             syncPreviews();
         }
-        coverState.dragging = true;
-        coverState.dragOffsetX = event.clientX - rect.left;
-        coverState.dragOffsetY = event.clientY - rect.top;
+        const point = getPointerInStage(event);
+        if (!LayerGeometry.hitTestLayerAtPoint(layer, point)) {
+            return;
+        }
+        if (!DragController.begin(layer, point)) {
+            return;
+        }
         coverLayerStage.setPointerCapture(event.pointerId);
         event.preventDefault();
     });
@@ -2541,29 +3091,14 @@
             return;
         }
 
-        if (!coverState.dragging) {
+        if (!coverState.isDragging) {
             return;
         }
-        const layer = getSelectedLayer();
-        if (!layer) {
-            return;
-        }
-        const parentRect = coverMakerCard.getBoundingClientRect();
-        const position = clampLayerPosition(
-            layer,
-            event.clientX - parentRect.left - coverState.dragOffsetX,
-            event.clientY - parentRect.top - coverState.dragOffsetY
-        );
-        layer.x = position.x;
-        layer.y = position.y;
-        syncLayerVector(layer);
-        renderCoverLayers();
-        renderLayerList();
-        syncPreviews();
+        DragController.apply(event);
     });
 
     coverLayerStage.addEventListener("pointerup", () => {
-        coverState.dragging = false;
+        DragController.end();
         stopLayerTransform();
     });
 
@@ -2705,12 +3240,32 @@
             activeEl.tagName === "TEXTAREA" ||
             activeEl.isContentEditable
         );
-        if (inTypingContext || coverState.retouchEnabled) {
+        if (coverState.retouchEnabled) {
+            return;
+        }
+
+        const isUndo = (event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === "z";
+        const isRedo = (event.metaKey || event.ctrlKey) &&
+            ((event.shiftKey && event.key.toLowerCase() === "z") || event.key.toLowerCase() === "y");
+        if (!inTypingContext && isUndo) {
+            event.preventDefault();
+            CoverHistory.undo();
+            return;
+        }
+        if (!inTypingContext && isRedo) {
+            event.preventDefault();
+            CoverHistory.redo();
+            return;
+        }
+        if (inTypingContext) {
             return;
         }
 
         const layer = getSelectedLayer();
         if (!layer) {
+            return;
+        }
+        if (layer.locked) {
             return;
         }
 
@@ -2750,29 +3305,124 @@
             renderCoverLayers();
             renderLayerList();
             syncPreviews();
+            CoverHistory.push();
         }
     });
 
-    workTitleInput.addEventListener("input", syncPreviews);
-    workBodyInput.addEventListener("input", syncPreviews);
+    function getEmojiPoolKey() {
+        if (activeEmojiTarget === "body") return "body";
+        if (activeEmojiTarget === "title") return "title";
+        return "common";
+    }
+
+    function getVisibleEmojiList(poolKey) {
+        const pool = emojiPools[poolKey] || emojiPools.common;
+        const offset = emojiOffsetMap[poolKey] || 0;
+        if (pool.length <= EMOJI_MAX_VISIBLE) {
+            return pool.slice(0, EMOJI_MAX_VISIBLE);
+        }
+        const result = [];
+        for (let i = 0; i < EMOJI_MAX_VISIBLE; i++) {
+            result.push(pool[(offset + i) % pool.length]);
+        }
+        return result;
+    }
+
+    function renderEmojiSuggest() {
+        const poolKey = getEmojiPoolKey();
+        emojiLabel.textContent = activeEmojiTarget === "body" ? "正文 emoji" : "标题 emoji";
+        emojiChipList.innerHTML = "";
+        getVisibleEmojiList(poolKey).forEach((emoji) => {
+            const chip = document.createElement("button");
+            chip.type = "button";
+            chip.className = "emoji-chip";
+            chip.dataset.emoji = emoji;
+            chip.textContent = emoji;
+            emojiChipList.appendChild(chip);
+        });
+    }
+
+    function placeEmojiSuggestForTarget(target) {
+        if (!target || !editorContentScroll) {
+            return;
+        }
+        if (target === workTitleInput) {
+            activeEmojiTarget = "title";
+            workTitleInput.insertAdjacentElement("afterend", emojiSuggest);
+        } else {
+            activeEmojiTarget = "body";
+            workBodyInput.insertAdjacentElement("beforebegin", emojiSuggest);
+        }
+        renderEmojiSuggest();
+    }
+
+    function insertEmojiIntoTitle(emoji) {
+        const start = workTitleInput.selectionStart ?? workTitleInput.value.length;
+        const end = workTitleInput.selectionEnd ?? workTitleInput.value.length;
+        const prefix = workTitleInput.value.slice(0, start);
+        const suffix = workTitleInput.value.slice(end);
+        const spacer = prefix && !prefix.endsWith(" ") ? " " : "";
+        workTitleInput.value = `${prefix}${spacer}${emoji}${suffix}`;
+        const caret = (prefix + spacer + emoji).length;
+        workTitleInput.focus();
+        workTitleInput.setSelectionRange(caret, caret);
+    }
+
+    function insertEmojiIntoBody(emoji) {
+        workBodyInput.focus();
+        const selection = window.getSelection();
+        if (!selection || !selection.rangeCount) {
+            workBodyInput.append(emoji);
+            return;
+        }
+        let range = selection.getRangeAt(0);
+        if (!workBodyInput.contains(range.commonAncestorContainer)) {
+            range = document.createRange();
+            range.selectNodeContents(workBodyInput);
+            range.collapse(false);
+            selection.removeAllRanges();
+            selection.addRange(range);
+        }
+        const textNode = document.createTextNode(emoji);
+        range.insertNode(textNode);
+        range.setStartAfter(textNode);
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+    }
+
+    workTitleInput.addEventListener("input", () => {
+        placeEmojiSuggestForTarget(workTitleInput);
+        syncPreviews();
+    });
+    workBodyInput.addEventListener("input", () => {
+        placeEmojiSuggestForTarget(workBodyInput);
+        syncPreviews();
+    });
+    workTitleInput.addEventListener("focus", () => placeEmojiSuggestForTarget(workTitleInput));
+    workBodyInput.addEventListener("focus", () => placeEmojiSuggestForTarget(workBodyInput));
+    workTitleInput.addEventListener("click", () => placeEmojiSuggestForTarget(workTitleInput));
+    workBodyInput.addEventListener("click", () => placeEmojiSuggestForTarget(workBodyInput));
+    workBodyInput.addEventListener("keyup", () => placeEmojiSuggestForTarget(workBodyInput));
+
+    emojiSwitchBtn.addEventListener("click", () => {
+        const poolKey = getEmojiPoolKey();
+        const poolLength = (emojiPools[poolKey] || emojiPools.common).length;
+        emojiOffsetMap[poolKey] = (emojiOffsetMap[poolKey] + EMOJI_MAX_VISIBLE) % Math.max(1, poolLength);
+        renderEmojiSuggest();
+    });
 
     emojiSuggest.addEventListener("click", (event) => {
         const trigger = event.target.closest("[data-emoji]");
         if (!trigger) {
             return;
         }
-
         const emoji = trigger.dataset.emoji;
-        const start = workTitleInput.selectionStart ?? workTitleInput.value.length;
-        const end = workTitleInput.selectionEnd ?? workTitleInput.value.length;
-        const prefix = workTitleInput.value.slice(0, start);
-        const suffix = workTitleInput.value.slice(end);
-        const spacer = prefix && !prefix.endsWith(" ") ? " " : "";
-
-        workTitleInput.value = `${prefix}${spacer}${emoji}${suffix}`;
-        const caret = (prefix + spacer + emoji).length;
-        workTitleInput.focus();
-        workTitleInput.setSelectionRange(caret, caret);
+        if (activeEmojiTarget === "body") {
+            insertEmojiIntoBody(emoji);
+        } else {
+            insertEmojiIntoTitle(emoji);
+        }
         syncPreviews();
     });
 
@@ -2828,8 +3478,15 @@
     }
 
     function getCoverPreviewState() {
+        const noteImages = coverState.backgroundEntries.length
+            ? coverState.backgroundEntries.map((entry) => entry.displayDataUrl || entry.cleanedDataUrl || entry.originalDataUrl).filter(Boolean)
+            : [coverState.displayImageDataUrl || getCanvasDataUrl()];
+        const activeImageIndex = Math.max(0, Math.min(coverState.currentBackgroundIndex, noteImages.length - 1));
+        const activeImageDataUrl = noteImages[activeImageIndex] || (coverState.displayImageDataUrl || getCanvasDataUrl());
         return {
-            imageDataUrl: coverState.displayImageDataUrl || getCanvasDataUrl(),
+            imageDataUrl: activeImageDataUrl,
+            noteImages,
+            activeImageIndex,
             author: document.getElementById("cover-author").innerText.trim() || "洱畔",
             avatar: document.getElementById("cover-avatar").innerText.trim() || "115",
             title: (coverState.layers.findLast?.((layer) => layer.type === "text") || [...coverState.layers].reverse().find((layer) => layer.type === "text"))?.text?.trim() || "输入封面标题",
@@ -2851,6 +3508,7 @@
 
         const coverImage = document.getElementById("note-cover-image");
         coverImage.src = previewState.imageDataUrl;
+        renderBackgroundIndicators();
         renderPreviewLayers(document.getElementById("note-layer-stage"), previewState.layers, coverImage.parentElement.clientWidth, coverImage.parentElement.clientHeight);
     }
 
@@ -2899,11 +3557,11 @@
         });
     }
 
-    function createDiscoverCard(cardData, previewState, isDynamic) {
-        const coverContent = isDynamic
+    function createDiscoverCard(cardData, previewState, options = {}) {
+        const coverContent = options.dynamic
             ? `
                 <div class="discover-cover">
-                    <img src="${previewState.imageDataUrl}" alt="封面预览">
+                    <img src="${options.coverUrl || previewState.imageDataUrl}" alt="封面预览">
                     <div class="cover-layer-stage discover-layer-stage" data-discover-layers="true"></div>
                 </div>
             `
@@ -2934,26 +3592,27 @@
     function updateDiscoveryPreview(previewState) {
         const grid = document.getElementById("discovery-grid");
         const title = workTitleInput.value.trim() || "无标题";
-
-        const cards = [
-            {
-                title,
-                author: previewState.author,
-                avatar: previewState.avatar,
-                likes: "137"
-            },
-            ...discoverSeedCards
-        ];
+        const dynamicCards = previewState.noteImages.slice(0, 9).map((coverUrl, idx) => ({
+            title: idx === previewState.activeImageIndex ? `${title} · 当前封面` : `${title} · 方案 ${idx + 1}`,
+            author: previewState.author,
+            avatar: previewState.avatar,
+            likes: `${137 + idx}`,
+            coverUrl
+        }));
+        const cards = [...dynamicCards, ...discoverSeedCards];
 
         grid.innerHTML = cards
-            .map((card, index) => createDiscoverCard(card, previewState, index === 0))
+            .map((card, index) => createDiscoverCard(card, previewState, {
+                dynamic: index < dynamicCards.length,
+                coverUrl: card.coverUrl
+            }))
             .join("");
 
-        const discoverLayerStage = grid.querySelector("[data-discover-layers='true']");
-        if (discoverLayerStage) {
+        const discoverLayerStages = grid.querySelectorAll("[data-discover-layers='true']");
+        discoverLayerStages.forEach((discoverLayerStage) => {
             const cover = discoverLayerStage.parentElement;
             renderPreviewLayers(discoverLayerStage, previewState.layers, cover.clientWidth, cover.clientHeight);
-        }
+        });
     }
 
     function syncPreviews() {
@@ -3061,10 +3720,17 @@
         coverState.displayImageDataUrl = getCanvasDataUrl();
         coverState.layers = [];
         coverState.selectedLayerId = "";
+        coverState.backgroundEntries = [];
+        coverState.currentBackgroundIndex = 0;
+        coverState.historyStack = [];
+        coverState.historyIndex = -1;
         applyCoverTextStyles();
         syncCoverEditorControls();
         renderLayerList();
+        renderBackgroundIndicators();
+        placeEmojiSuggestForTarget(workTitleInput);
         syncPreviews();
+        CoverHistory.push();
         hideStartupTip();
     }
 
