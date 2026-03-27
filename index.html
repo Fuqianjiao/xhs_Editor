@@ -1292,7 +1292,10 @@
                         </div>
                     </div>
                     <div class="control-row">
-                        <button class="btn-sys" type="button" id="delete-layer-btn">删除当前图层</button>
+                        <div class="layer-tools">
+                            <button class="btn-sys" type="button" id="copy-layer-btn">复制图层</button>
+                            <button class="btn-sys" type="button" id="delete-layer-btn">删除图层</button>
+                        </div>
                     </div>
                     <div class="control-row">
                         <div class="layer-list" id="layer-list"></div>
@@ -1513,6 +1516,7 @@
     const addImageLayerBtn = document.getElementById("add-image-layer-btn");
     const moveLayerUpBtn = document.getElementById("move-layer-up-btn");
     const moveLayerDownBtn = document.getElementById("move-layer-down-btn");
+    const copyLayerBtn = document.getElementById("copy-layer-btn");
     const deleteLayerBtn = document.getElementById("delete-layer-btn");
     const layerList = document.getElementById("layer-list");
     const layerCount = document.getElementById("layer-count");
@@ -3053,7 +3057,16 @@
                 if (LayerGeometry.hitTestLayerAtPoint(selected, point) && DragController.begin(selected, point)) {
                     coverLayerStage.setPointerCapture(event.pointerId);
                     event.preventDefault();
+                    return;
                 }
+            }
+            // 点击空白区域时取消选择
+            if (coverState.selectedLayerId) {
+                coverState.selectedLayerId = "";
+                renderCoverLayers();
+                renderLayerList();
+                syncCoverEditorControls();
+                syncPreviews();
             }
             return;
         }
@@ -3205,8 +3218,39 @@
         reader.readAsDataURL(file);
     });
 
+    copyLayerBtn.addEventListener("click", () => {
+        const layer = getSelectedLayer();
+        if (!layer) return;
+        if (coverState.layers.length >= 10) {
+            alert("最多支持 10 个图层");
+            return;
+        }
+        CoverHistory.push();
+        let newLayer;
+        if (layer.type === "text") {
+            newLayer = createTextLayer({
+                ...layer,
+                id: undefined,
+                name: layer.name + " 副本",
+                x: layer.x + 20,
+                y: layer.y + 20
+            });
+        } else {
+            newLayer = createImageLayer(layer.src, {
+                ...layer,
+                id: undefined,
+                name: layer.name + " 副本",
+                x: layer.x + 20,
+                y: layer.y + 20
+            });
+        }
+        coverState.layers.push(newLayer);
+        selectLayer(newLayer.id);
+    });
+
     deleteLayerBtn.addEventListener("click", () => {
         if (!coverState.selectedLayerId) return;
+        CoverHistory.push();
         coverState.layers = coverState.layers.filter((layer) => layer.id !== coverState.selectedLayerId);
         coverState.selectedLayerId = coverState.layers[coverState.layers.length - 1]?.id || "";
         renderCoverLayers();
@@ -3218,6 +3262,7 @@
     moveLayerUpBtn.addEventListener("click", () => {
         const index = coverState.layers.findIndex((layer) => layer.id === coverState.selectedLayerId);
         if (index < 0 || index === coverState.layers.length - 1) return;
+        CoverHistory.push();
         [coverState.layers[index], coverState.layers[index + 1]] = [coverState.layers[index + 1], coverState.layers[index]];
         renderCoverLayers();
         renderLayerList();
@@ -3227,6 +3272,7 @@
     moveLayerDownBtn.addEventListener("click", () => {
         const index = coverState.layers.findIndex((layer) => layer.id === coverState.selectedLayerId);
         if (index <= 0) return;
+        CoverHistory.push();
         [coverState.layers[index], coverState.layers[index - 1]] = [coverState.layers[index - 1], coverState.layers[index]];
         renderCoverLayers();
         renderLayerList();
@@ -3271,12 +3317,43 @@
 
         if (event.key === "Backspace" || event.key === "Delete") {
             event.preventDefault();
+            CoverHistory.push();
             coverState.layers = coverState.layers.filter((item) => item.id !== layer.id);
             coverState.selectedLayerId = coverState.layers[coverState.layers.length - 1]?.id || "";
             renderCoverLayers();
             renderLayerList();
             syncCoverEditorControls();
             syncPreviews();
+            return;
+        }
+
+        // Ctrl/Cmd + D 复制图层
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "d") {
+            event.preventDefault();
+            if (coverState.layers.length >= 10) {
+                return;
+            }
+            CoverHistory.push();
+            let newLayer;
+            if (layer.type === "text") {
+                newLayer = createTextLayer({
+                    ...layer,
+                    id: undefined,
+                    name: layer.name + " 副本",
+                    x: layer.x + 20,
+                    y: layer.y + 20
+                });
+            } else {
+                newLayer = createImageLayer(layer.src, {
+                    ...layer,
+                    id: undefined,
+                    name: layer.name + " 副本",
+                    x: layer.x + 20,
+                    y: layer.y + 20
+                });
+            }
+            coverState.layers.push(newLayer);
+            selectLayer(newLayer.id);
             return;
         }
 
