@@ -267,6 +267,60 @@
         pointer-events: none;
     }
 
+    .cover-transform-overlay {
+        position: absolute;
+        border: 1.5px solid #3b82f6;
+        box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
+        pointer-events: none;
+        z-index: 2000;
+    }
+
+    .layer-transform-handle {
+        position: absolute;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 2px solid #fff;
+        background: #2563eb;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+        pointer-events: auto;
+        touch-action: none;
+    }
+
+    .layer-transform-handle[data-handle="nw"] {
+        top: -6px;
+        left: -6px;
+        cursor: nwse-resize;
+    }
+
+    .layer-transform-handle[data-handle="ne"] {
+        top: -6px;
+        right: -6px;
+        cursor: nesw-resize;
+    }
+
+    .layer-transform-handle[data-handle="sw"] {
+        bottom: -6px;
+        left: -6px;
+        cursor: nesw-resize;
+    }
+
+    .layer-transform-handle[data-handle="se"] {
+        right: -6px;
+        bottom: -6px;
+        cursor: nwse-resize;
+    }
+
+    .layer-transform-handle[data-handle="rotate"] {
+        top: -28px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 14px;
+        height: 14px;
+        background: #1d4ed8;
+        cursor: grab;
+    }
+
     .cover-watermark {
         position: absolute;
         left: 20px;
@@ -337,6 +391,18 @@
         margin: 0 0 10px;
         font-size: 15px;
         font-weight: 700;
+    }
+
+    .control-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+
+    .control-head .control-title {
+        margin: 0;
     }
 
     .control-row {
@@ -511,9 +577,18 @@
     }
 
     .layer-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 96px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        border: 1px solid #e6eaf0;
+        background: #fff;
         color: #8a8f98;
         font-size: 12px;
         font-weight: 700;
+        white-space: nowrap;
     }
 
     .btn-primary {
@@ -852,7 +927,8 @@
 
     .note-cover-preview {
         position: relative;
-        height: 200px;
+        width: 100%;
+        aspect-ratio: 3 / 4;
         flex-shrink: 0;
         overflow: hidden;
         background: #f1f5f9;
@@ -1112,8 +1188,8 @@
                 </div>
 
                 <div class="cover-maker-container" id="cover-maker-card">
-                    <canvas class="cover-canvas" id="cover-bg-canvas" width="900" height="1200"></canvas>
-                    <canvas class="mask-canvas" id="cover-mask-canvas" width="900" height="1200"></canvas>
+                    <canvas class="cover-canvas" id="cover-bg-canvas" width="1080" height="1440"></canvas>
+                    <canvas class="mask-canvas" id="cover-mask-canvas" width="1080" height="1440"></canvas>
                     <div class="cover-grid"></div>
                     <div class="cover-toolbar-tag">自动去字中枢</div>
                     <div class="cover-overlay" id="cover-overlay">
@@ -1135,7 +1211,10 @@
                 <input type="file" id="cover-layer-image-input" accept="image/*" style="display:none">
 
                 <div class="control-card">
-                    <h3 class="control-title">图层</h3>
+                    <div class="control-head">
+                        <h3 class="control-title">图层</h3>
+                        <span class="layer-count" id="layer-count">0 / 10 图层</span>
+                    </div>
                     <div class="control-row">
                         <div class="layer-tools">
                             <button class="btn-sys" type="button" id="add-text-layer-btn">添加文字</button>
@@ -1146,7 +1225,6 @@
                     </div>
                     <div class="control-row">
                         <button class="btn-sys" type="button" id="delete-layer-btn">删除当前图层</button>
-                        <span class="layer-count" id="layer-count">1 / 10 图层</span>
                     </div>
                     <div class="control-row">
                         <div class="layer-list" id="layer-list"></div>
@@ -1352,8 +1430,8 @@
         startupTip.classList.add("show");
     });
 
-    const COVER_CANVAS_WIDTH = 900;
-    const COVER_CANVAS_HEIGHT = 1200;
+    const COVER_CANVAS_WIDTH = 1080;
+    const COVER_CANVAS_HEIGHT = 1440;
 
     const coverMakerCard = document.getElementById("cover-maker-card");
     const coverCanvas = document.getElementById("cover-bg-canvas");
@@ -1403,6 +1481,9 @@
         retouchEnabled: false,
         isMaskPainting: false,
         dragging: false,
+        transforming: false,
+        transformHandle: "",
+        transformStart: null,
         editingText: false,
         dragOffsetX: 0,
         dragOffsetY: 0,
@@ -1480,7 +1561,7 @@
     }
 
     function createTextLayer(overrides = {}) {
-        return {
+        const layer = {
             id: createLayerId(),
             type: "text",
             name: overrides.name || `文字 ${coverState.layers.filter((item) => item.type === "text").length + 1}`,
@@ -1496,12 +1577,15 @@
             textAlign: overrides.textAlign ?? coverState.textAlign,
             lineHeight: overrides.lineHeight ?? coverState.lineHeight,
             letterSpacing: overrides.letterSpacing ?? coverState.letterSpacing,
-            color: overrides.color ?? coverState.color
+            color: overrides.color ?? coverState.color,
+            rotation: overrides.rotation ?? 0
         };
+        syncLayerVector(layer);
+        return layer;
     }
 
     function createImageLayer(dataUrl, overrides = {}) {
-        return {
+        const layer = {
             id: createLayerId(),
             type: "image",
             name: overrides.name || `图片 ${coverState.layers.filter((item) => item.type === "image").length + 1}`,
@@ -1509,7 +1593,22 @@
             x: overrides.x ?? 80,
             y: overrides.y ?? 160,
             width: overrides.width ?? 240,
-            height: overrides.height ?? 240
+            height: overrides.height ?? 240,
+            rotation: overrides.rotation ?? 0
+        };
+        syncLayerVector(layer);
+        return layer;
+    }
+
+    function syncLayerVector(layer) {
+        const stageWidth = Math.max(1, coverMakerCard.offsetWidth || 1);
+        const stageHeight = Math.max(1, coverMakerCard.offsetHeight || 1);
+        layer.vector = {
+            x: layer.x / stageWidth,
+            y: layer.y / stageHeight,
+            width: (layer.width || 0) / stageWidth,
+            height: (layer.height || 0) / stageHeight,
+            rotation: layer.rotation || 0
         };
     }
 
@@ -1540,6 +1639,56 @@
         element.style.letterSpacing = `${layer.letterSpacing}em`;
         element.style.color = layer.color;
         element.style.width = `${layer.width}px`;
+        element.style.transform = `rotate(${layer.rotation || 0}deg)`;
+        element.style.transformOrigin = "center center";
+    }
+
+    function getLayerRenderSize(layer) {
+        if (!layer) {
+            return { width: 0, height: 0 };
+        }
+        if (layer.type === "image") {
+            return { width: layer.width, height: layer.height };
+        }
+
+        const node = coverLayerStage.querySelector(`.cover-layer[data-layer-id="${layer.id}"]`);
+        if (!node) {
+            return { width: layer.width, height: 120 };
+        }
+
+        return {
+            width: node.offsetWidth || layer.width,
+            height: node.offsetHeight || 120
+        };
+    }
+
+    function renderCoverTransformOverlay() {
+        const selected = getSelectedLayer();
+        if (!selected || coverState.editingText || coverState.retouchEnabled) {
+            return;
+        }
+
+        const size = getLayerRenderSize(selected);
+        const overlay = document.createElement("div");
+        overlay.className = "cover-transform-overlay";
+        overlay.dataset.layerId = selected.id;
+        overlay.style.left = `${selected.x}px`;
+        overlay.style.top = `${selected.y}px`;
+        overlay.style.width = `${size.width}px`;
+        overlay.style.height = `${size.height}px`;
+        overlay.style.transform = `rotate(${selected.rotation || 0}deg)`;
+        overlay.style.transformOrigin = "center center";
+
+        ["nw", "ne", "sw", "se", "rotate"].forEach((handle) => {
+            const dot = document.createElement("button");
+            dot.type = "button";
+            dot.className = "layer-transform-handle";
+            dot.dataset.handle = handle;
+            dot.setAttribute("aria-label", `${handle} handle`);
+            overlay.appendChild(dot);
+        });
+
+        coverLayerStage.appendChild(overlay);
     }
 
     function renderCoverLayers() {
@@ -1565,6 +1714,8 @@
             } else {
                 layerNode.style.width = `${layer.width}px`;
                 layerNode.style.height = `${layer.height}px`;
+                layerNode.style.transform = `rotate(${layer.rotation || 0}deg)`;
+                layerNode.style.transformOrigin = "center center";
                 const img = document.createElement("img");
                 img.src = layer.src;
                 img.alt = layer.name;
@@ -1573,6 +1724,8 @@
 
             coverLayerStage.appendChild(layerNode);
         });
+
+        renderCoverTransformOverlay();
     }
 
     function renderLayerList() {
@@ -1607,6 +1760,125 @@
             x: Math.max(10, Math.min(x, stageWidth - widthPx - 10)),
             y: Math.max(10, Math.min(y, stageHeight - heightPx - 70))
         };
+    }
+
+    function getPointerInStage(event) {
+        const stageRect = coverLayerStage.getBoundingClientRect();
+        return {
+            x: event.clientX - stageRect.left,
+            y: event.clientY - stageRect.top
+        };
+    }
+
+    function beginLayerTransform(layer, handle, event) {
+        const size = getLayerRenderSize(layer);
+        const stagePoint = getPointerInStage(event);
+        const centerX = layer.x + size.width / 2;
+        const centerY = layer.y + size.height / 2;
+
+        coverState.transforming = true;
+        coverState.transformHandle = handle;
+        coverState.transformStart = {
+            pointerX: stagePoint.x,
+            pointerY: stagePoint.y,
+            layerX: layer.x,
+            layerY: layer.y,
+            width: layer.width,
+            height: layer.height,
+            fontSize: layer.fontSize || coverState.fontSize,
+            rotation: layer.rotation || 0,
+            renderWidth: size.width,
+            renderHeight: size.height,
+            centerX,
+            centerY,
+            startAngle: Math.atan2(stagePoint.y - centerY, stagePoint.x - centerX)
+        };
+    }
+
+    function applyLayerTransform(event) {
+        if (!coverState.transforming) {
+            return;
+        }
+
+        const layer = getSelectedLayer();
+        const start = coverState.transformStart;
+        if (!layer || !start) {
+            return;
+        }
+
+        const point = getPointerInStage(event);
+        const dx = point.x - start.pointerX;
+        const dy = point.y - start.pointerY;
+        const minSize = 42;
+
+        if (coverState.transformHandle === "rotate") {
+            const currentAngle = Math.atan2(point.y - start.centerY, point.x - start.centerX);
+            const delta = currentAngle - start.startAngle;
+            layer.rotation = start.rotation + (delta * 180) / Math.PI;
+            syncLayerVector(layer);
+        } else if (layer.type === "image") {
+            let nextX = start.layerX;
+            let nextY = start.layerY;
+            let nextWidth = start.width;
+            let nextHeight = start.height;
+
+            if (coverState.transformHandle.includes("e")) {
+                nextWidth = start.width + dx;
+            }
+            if (coverState.transformHandle.includes("s")) {
+                nextHeight = start.height + dy;
+            }
+            if (coverState.transformHandle.includes("w")) {
+                nextWidth = start.width - dx;
+                nextX = start.layerX + dx;
+            }
+            if (coverState.transformHandle.includes("n")) {
+                nextHeight = start.height - dy;
+                nextY = start.layerY + dy;
+            }
+
+            if (nextWidth < minSize) {
+                nextX += nextWidth - minSize;
+                nextWidth = minSize;
+            }
+            if (nextHeight < minSize) {
+                nextY += nextHeight - minSize;
+                nextHeight = minSize;
+            }
+
+            const bounded = clampLayerPosition({ ...layer, width: nextWidth, height: nextHeight, type: "image" }, nextX, nextY);
+            layer.x = bounded.x;
+            layer.y = bounded.y;
+            layer.width = nextWidth;
+            layer.height = nextHeight;
+            syncLayerVector(layer);
+        } else {
+            let nextX = start.layerX;
+            let nextWidth = start.width;
+            if (coverState.transformHandle.includes("e")) {
+                nextWidth = start.width + dx;
+            }
+            if (coverState.transformHandle.includes("w")) {
+                nextWidth = start.width - dx;
+                nextX = start.layerX + dx;
+            }
+
+            nextWidth = Math.max(80, nextWidth);
+            const bounded = clampLayerPosition({ ...layer, width: nextWidth, type: "text" }, nextX, layer.y);
+            layer.x = bounded.x;
+            layer.width = nextWidth;
+            syncLayerVector(layer);
+        }
+
+        renderCoverLayers();
+        renderLayerList();
+        syncPreviews();
+    }
+
+    function stopLayerTransform() {
+        coverState.transforming = false;
+        coverState.transformHandle = "";
+        coverState.transformStart = null;
     }
 
     function resetCoverToDefault() {
@@ -2125,6 +2397,9 @@
     });
 
     document.addEventListener("pointerup", () => {
+        coverState.dragging = false;
+        stopLayerTransform();
+
         if (coverState.retouchEnabled && retouchPointerDown && coverState.strokePoints.length) {
             updateCleanupStatus("正在根据涂抹区域自动填充内容...", "warn");
             retouchPromise = retouchPromise.then(() => {
@@ -2150,6 +2425,7 @@
         }
 
         Object.assign(layer, patch);
+        syncLayerVector(layer);
         renderCoverLayers();
         renderLayerList();
         syncCoverEditorControls();
@@ -2213,6 +2489,23 @@
             return;
         }
 
+        const handle = event.target.closest(".layer-transform-handle");
+        if (handle) {
+            const overlay = handle.closest(".cover-transform-overlay");
+            const targetId = overlay?.dataset.layerId;
+            const layer = coverState.layers.find((item) => item.id === targetId);
+            if (!layer) {
+                return;
+            }
+            if (coverState.selectedLayerId !== layer.id) {
+                coverState.selectedLayerId = layer.id;
+            }
+            beginLayerTransform(layer, handle.dataset.handle, event);
+            coverLayerStage.setPointerCapture(event.pointerId);
+            event.preventDefault();
+            return;
+        }
+
         const node = event.target.closest(".cover-layer");
         if (!node) {
             return;
@@ -2223,21 +2516,31 @@
             return;
         }
 
-        selectLayer(layer.id);
-
         if (layer.type === "text" && node.classList.contains("editing")) {
             return;
         }
 
         const rect = node.getBoundingClientRect();
+        if (coverState.selectedLayerId !== layer.id) {
+            coverState.selectedLayerId = layer.id;
+            renderCoverLayers();
+            renderLayerList();
+            syncCoverEditorControls();
+            syncPreviews();
+        }
         coverState.dragging = true;
         coverState.dragOffsetX = event.clientX - rect.left;
         coverState.dragOffsetY = event.clientY - rect.top;
-        node.setPointerCapture(event.pointerId);
+        coverLayerStage.setPointerCapture(event.pointerId);
         event.preventDefault();
     });
 
     coverLayerStage.addEventListener("pointermove", (event) => {
+        if (coverState.transforming) {
+            applyLayerTransform(event);
+            return;
+        }
+
         if (!coverState.dragging) {
             return;
         }
@@ -2253,6 +2556,7 @@
         );
         layer.x = position.x;
         layer.y = position.y;
+        syncLayerVector(layer);
         renderCoverLayers();
         renderLayerList();
         syncPreviews();
@@ -2260,6 +2564,7 @@
 
     coverLayerStage.addEventListener("pointerup", () => {
         coverState.dragging = false;
+        stopLayerTransform();
     });
 
     coverLayerStage.addEventListener("dblclick", (event) => {
@@ -2275,6 +2580,7 @@
         if (!node) return;
         coverState.editingText = true;
         node.classList.add("editing");
+        coverLayerStage.querySelector(".cover-transform-overlay")?.remove();
     });
 
     coverLayerStage.addEventListener("focusout", (event) => {
@@ -2282,6 +2588,7 @@
         if (!node) return;
         coverState.editingText = false;
         node.classList.remove("editing");
+        renderCoverLayers();
     });
 
     coverLayerStage.addEventListener("input", (event) => {
@@ -2291,6 +2598,7 @@
         if (!layer) return;
         layer.text = node.innerText;
         layer.name = (node.innerText.trim() || "文字图层").slice(0, 12);
+        syncLayerVector(layer);
         renderLayerList();
         syncPreviews();
     });
@@ -2314,6 +2622,7 @@
         if (!layer) return;
         layer.text = node.innerText;
         layer.name = (node.innerText.trim() || "文字图层").slice(0, 12);
+        syncLayerVector(layer);
         renderLayerList();
     });
 
@@ -2387,6 +2696,61 @@
         renderCoverLayers();
         renderLayerList();
         syncPreviews();
+    });
+
+    document.addEventListener("keydown", (event) => {
+        const activeEl = document.activeElement;
+        const inTypingContext = activeEl && (
+            activeEl.tagName === "INPUT" ||
+            activeEl.tagName === "TEXTAREA" ||
+            activeEl.isContentEditable
+        );
+        if (inTypingContext || coverState.retouchEnabled) {
+            return;
+        }
+
+        const layer = getSelectedLayer();
+        if (!layer) {
+            return;
+        }
+
+        if (event.key === "Backspace" || event.key === "Delete") {
+            event.preventDefault();
+            coverState.layers = coverState.layers.filter((item) => item.id !== layer.id);
+            coverState.selectedLayerId = coverState.layers[coverState.layers.length - 1]?.id || "";
+            renderCoverLayers();
+            renderLayerList();
+            syncCoverEditorControls();
+            syncPreviews();
+            return;
+        }
+
+        const step = event.shiftKey ? 10 : 1;
+        let moved = false;
+        if (event.key === "ArrowLeft") {
+            layer.x -= step;
+            moved = true;
+        } else if (event.key === "ArrowRight") {
+            layer.x += step;
+            moved = true;
+        } else if (event.key === "ArrowUp") {
+            layer.y -= step;
+            moved = true;
+        } else if (event.key === "ArrowDown") {
+            layer.y += step;
+            moved = true;
+        }
+
+        if (moved) {
+            event.preventDefault();
+            const bounded = clampLayerPosition(layer, layer.x, layer.y);
+            layer.x = bounded.x;
+            layer.y = bounded.y;
+            syncLayerVector(layer);
+            renderCoverLayers();
+            renderLayerList();
+            syncPreviews();
+        }
     });
 
     workTitleInput.addEventListener("input", syncPreviews);
@@ -2471,10 +2835,10 @@
             title: (coverState.layers.findLast?.((layer) => layer.type === "text") || [...coverState.layers].reverse().find((layer) => layer.type === "text"))?.text?.trim() || "输入封面标题",
             layers: coverState.layers.map((layer) => ({
                 ...layer,
-                xRatio: layer.x / coverMakerCard.offsetWidth,
-                yRatio: layer.y / coverMakerCard.offsetHeight,
-                widthRatio: (layer.width || 0) / coverMakerCard.offsetWidth,
-                heightRatio: (layer.height || 0) / coverMakerCard.offsetHeight
+                xRatio: layer.vector?.x ?? (layer.x / Math.max(1, coverMakerCard.offsetWidth)),
+                yRatio: layer.vector?.y ?? (layer.y / Math.max(1, coverMakerCard.offsetHeight)),
+                widthRatio: layer.vector?.width ?? ((layer.width || 0) / Math.max(1, coverMakerCard.offsetWidth)),
+                heightRatio: layer.vector?.height ?? ((layer.height || 0) / Math.max(1, coverMakerCard.offsetHeight))
             }))
         };
     }
@@ -2505,6 +2869,8 @@
             node.style.maxWidth = `${width - safeLeft}px`;
             node.style.maxHeight = `${height - safeTop}px`;
             node.style.overflow = "hidden";
+            node.style.transform = `rotate(${layer.rotation || 0}deg)`;
+            node.style.transformOrigin = "center center";
 
             if (layer.type === "text") {
                 node.textContent = layer.text;
