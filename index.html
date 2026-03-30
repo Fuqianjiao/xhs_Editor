@@ -1418,7 +1418,12 @@
 
                 <div class="content-meta">
                     <span>添加正文</span>
-                    <span id="content-counter">0 / 1000</span>
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <button id="copy-body-btn" title="复制正文" style="width:30px;height:30px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:6px;color:var(--text-color-sub);transition:background .15s,color .15s;padding:0;" onmouseenter="this.style.background='var(--hover-bg,#f0f0f0)';this.style.color='var(--accent-color,#ff2442)'" onmouseleave="this.style.background='transparent';this.style.color='var(--text-color-sub)'">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:17px;height:17px;"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        </button>
+                        <span id="content-counter">0 / 1000</span>
+                    </div>
                 </div>
 
                 <div class="content-body-input" id="work-body" contenteditable="true" spellcheck="false" data-placeholder="输入作品内容...">父亲总爱在晚饭后拿出那只混色的木匣子，从里面小心翼翼地取出一张泛黄的照片。照片上的男人穿着剪裁奇特的黑斗篷，脸上盖着亮闪闪的银面具，手里握着一把造型锋利的剑。“这是你叔叔游乐，”父亲用手指反复摩挲着照片边缘，“他在很远的魔仙堡做事，等他寄来魔法宝石，咱就把这间小屋翻新，再给你买带花边的新裙子。”</div>
@@ -3519,6 +3524,33 @@
     function getPlainBodyText() {
         return workBodyInput.innerText.trim();
     }
+
+    // 复制正文（支持文字+emoji）
+    document.getElementById('copy-body-btn').addEventListener('click', () => {
+        const text = getPlainBodyText();
+        if (!text) return;
+        navigator.clipboard.writeText(text).then(() => {
+            const btn = document.getElementById('copy-body-btn');
+            const svg = btn.querySelector('svg');
+            // 临时换成勾选图标
+            svg.innerHTML = '<polyline points="20 6 9 17 4 12" stroke-width="2.2"/>';
+            btn.style.color = '#4eca8b';
+            setTimeout(() => {
+                svg.innerHTML = '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>';
+                btn.style.color = '';
+            }, 1500);
+        }).catch(() => {
+            // 备用方案
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+        });
+    });
 
     function updateContentCounter() {
         const textLength = getPlainBodyText().length;
