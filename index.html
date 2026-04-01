@@ -1513,6 +1513,9 @@
                 <div class="content-meta">
                     <span>添加正文</span>
                     <div style="display:flex;align-items:center;gap:10px;">
+                        <button id="format-brush-btn" title="格式刷" style="width:30px;height:30px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:6px;color:var(--text-color-sub);transition:background .15s,color .15s;padding:0;" onmouseenter="this.style.background='var(--hover-bg,#f0f0f0)';this.style.color='var(--accent-color,#ff2442)'" onmouseleave="if(!this.classList.contains('active')){this.style.background='transparent';this.style.color='var(--text-color-sub)'}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:17px;height:17px;"><path d="M9 15V9a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2"/><path d="M11 3H7a2 2 0 0 0-2 2v10c0 1.5.5 2 2 2h4"/><path d="M15 7h2a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2"/></svg>
+                        </button>
                         <button id="copy-body-btn" title="复制正文" style="width:30px;height:30px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:6px;color:var(--text-color-sub);transition:background .15s,color .15s;padding:0;" onmouseenter="this.style.background='var(--hover-bg,#f0f0f0)';this.style.color='var(--accent-color,#ff2442)'" onmouseleave="this.style.background='transparent';this.style.color='var(--text-color-sub)'">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:17px;height:17px;"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                         </button>
@@ -3695,6 +3698,166 @@
         return workBodyInput.innerText.trim();
     }
 
+    // 格式刷功能
+    let formatBrushActive = false;
+    let formatBrushMode = 'single'; // 'single' (单击) 或 'continuous' (双击)
+    let sourceFormat = null;
+    const formatBrushBtn = document.getElementById('format-brush-btn');
+        
+    // 获取选中文本的格式
+    function getSelectionFormat() {
+        const selection = window.getSelection();
+        if (!selection.rangeCount || selection.isCollapsed) return null;
+            
+        const range = selection.getRangeAt(0);
+        const container = range.commonAncestorContainer.parentElement;
+            
+        if (!container || !workBodyInput.contains(container)) return null;
+            
+        const computedStyle = window.getComputedStyle(container);
+        return {
+            fontWeight: computedStyle.fontWeight,
+            fontStyle: computedStyle.fontStyle,
+            textDecoration: computedStyle.textDecoration,
+            color: computedStyle.color,
+            fontSize: computedStyle.fontSize,
+            fontFamily: computedStyle.fontFamily,
+            textAlign: computedStyle.textAlign,
+            lineHeight: computedStyle.lineHeight,
+            letterSpacing: computedStyle.letterSpacing,
+            backgroundColor: computedStyle.backgroundColor !== 'rgba(0, 0, 0, 0)' ? computedStyle.backgroundColor : null
+        };
+    }
+        
+    // 应用格式到目标元素
+    function applyFormatToElement(element, format) {
+        if (!format) return;
+            
+        if (format.fontWeight) element.style.fontWeight = format.fontWeight;
+        if (format.fontStyle) element.style.fontStyle = format.fontStyle;
+        if (format.textDecoration && format.textDecoration !== 'none') {
+            element.style.textDecoration = format.textDecoration;
+        }
+        if (format.color) element.style.color = format.color;
+        if (format.fontSize) element.style.fontSize = format.fontSize;
+        if (format.fontFamily) element.style.fontFamily = format.fontFamily;
+        if (format.textAlign && format.textAlign !== 'start') element.style.textAlign = format.textAlign;
+        if (format.lineHeight) element.style.lineHeight = format.lineHeight;
+        if (format.letterSpacing) element.style.letterSpacing = format.letterSpacing;
+        if (format.backgroundColor) element.style.backgroundColor = format.backgroundColor;
+    }
+        
+    // 应用格式到选中的文本
+    function applyFormatToSelection(format) {
+        const selection = window.getSelection();
+        if (!selection.rangeCount || selection.isCollapsed) return;
+            
+        const range = selection.getRangeAt(0);
+        if (!workBodyInput.contains(range.commonAncestorContainer)) return;
+            
+        try {
+            // 创建一个 span 来包裹选中的文本并应用格式
+            const span = document.createElement('span');
+            range.surroundContents(span);
+            applyFormatToElement(span, format);
+        } catch (e) {
+            // 如果跨节点选择，使用 execCommand
+            if (format.fontWeight === 'bold' || format.fontWeight === '700') {
+                document.execCommand('bold', false, null);
+            }
+            if (format.fontStyle === 'italic') {
+                document.execCommand('italic', false, null);
+            }
+            if (format.textDecoration && format.textDecoration.includes('underline')) {
+                document.execCommand('underline', false, null);
+            }
+            if (format.color) {
+                document.execCommand('foreColor', false, format.color);
+            }
+        }
+    }
+        
+    // 激活格式刷
+    function activateFormatBrush(mode) {
+        sourceFormat = getSelectionFormat();
+        if (!sourceFormat) {
+            alert('请先选择要复制格式的文本');
+            return;
+        }
+            
+        formatBrushActive = true;
+        formatBrushMode = mode;
+        formatBrushBtn.classList.add('active');
+        formatBrushBtn.style.background = 'var(--accent-color,#ff2442)';
+        formatBrushBtn.style.color = '#fff';
+        formatBrushBtn.title = mode === 'single' ? '格式刷已激活（单击）' : '格式刷已激活（连击）';
+            
+        // 在正文区域添加鼠标事件监听
+        workBodyInput.addEventListener('mouseup', handleFormatBrushApply);
+    }
+        
+    //  deactivate 格式刷
+    function deactivateFormatBrush() {
+        formatBrushActive = false;
+        formatBrushMode = 'single';
+        sourceFormat = null;
+        formatBrushBtn.classList.remove('active');
+        formatBrushBtn.style.background = '';
+        formatBrushBtn.style.color = '';
+        formatBrushBtn.title = '格式刷';
+            
+        workBodyInput.removeEventListener('mouseup', handleFormatBrushApply);
+    }
+        
+    // 处理格式刷应用
+    function handleFormatBrushApply(e) {
+        if (!formatBrushActive) return;
+            
+        setTimeout(() => {
+            applyFormatToSelection(sourceFormat);
+                
+            if (formatBrushMode === 'single') {
+                deactivateFormatBrush();
+            }
+            // continuous 模式保持激活
+        }, 10);
+    }
+        
+    // 格式刷按钮点击事件
+    formatBrushBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+            
+        if (formatBrushActive) {
+            // 已经激活，关闭格式刷
+            deactivateFormatBrush();
+        } else {
+            // 检查是否快速点击两次（双击）
+            const now = Date.now();
+            if (formatBrushBtn.lastClickTime && now - formatBrushBtn.lastClickTime < 300) {
+                activateFormatBrush('continuous');
+            } else {
+                activateFormatBrush('single');
+            }
+            formatBrushBtn.lastClickTime = now;
+        }
+    });
+        
+    // 点击其他地方取消格式刷
+    document.addEventListener('click', (e) => {
+        if (formatBrushActive && 
+            !formatBrushBtn.contains(e.target) && 
+            !workBodyInput.contains(e.target)) {
+            deactivateFormatBrush();
+        }
+    });
+        
+    // ESC 键取消格式刷
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && formatBrushActive) {
+            deactivateFormatBrush();
+        }
+    });
+        
     // 复制正文（支持文字+emoji）
     document.getElementById('copy-body-btn').addEventListener('click', () => {
         const text = getPlainBodyText();
