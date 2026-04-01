@@ -751,6 +751,95 @@
         transform: translateY(-1px);
     }
 
+    /* 单个 chip 包裹层 */
+    .emoji-chip-wrap {
+        position: relative;
+        display: inline-flex;
+    }
+    .emoji-chip-wrap .emoji-chip-replace-btn {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #ff2442;
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity .15s;
+        padding: 0;
+        z-index: 2;
+        color: #fff;
+        font-size: 10px;
+        line-height: 1;
+    }
+    .emoji-chip-wrap:hover .emoji-chip-replace-btn {
+        opacity: 1;
+    }
+
+    /* 搜索替换弹层 */
+    #emoji-search-popup {
+        display: none;
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        z-index: 200;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(0,0,0,.12);
+        padding: 10px;
+        min-width: 280px;
+        max-width: 320px;
+    }
+    #emoji-search-popup.open {
+        display: block;
+    }
+    #emoji-search-input {
+        width: 100%;
+        height: 34px;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 0 10px;
+        font-size: 13px;
+        outline: none;
+        color: #30343b;
+    }
+    #emoji-search-input:focus {
+        border-color: #ff2442;
+    }
+    #emoji-search-results {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+        max-height: 120px;
+        overflow-y: auto;
+    }
+    .emoji-result-item {
+        font-size: 22px;
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 6px;
+        border: 1px solid transparent;
+        transition: background .12s;
+    }
+    .emoji-result-item:hover {
+        background: #f0f0f0;
+        border-color: #e5e7eb;
+    }
+    #emoji-search-status {
+        font-size: 12px;
+        color: #9aa1ac;
+        margin-top: 4px;
+        min-height: 16px;
+    }
+    .emoji-suggest { position: relative; }
+
     #emoji-chip-list {
         display: flex;
         align-items: center;
@@ -1410,10 +1499,15 @@
 
                 <div class="emoji-suggest" id="emoji-suggest">
                     <div class="emoji-suggest-head">
-                        <span class="emoji-label" id="emoji-label">推荐 emoji</span>
-                        <button class="emoji-switch" type="button" id="emoji-switch-btn">换一组</button>
+                        <span class="emoji-label" id="emoji-label">emoji</span>
                     </div>
                     <div id="emoji-chip-list"></div>
+                    <!-- 搜索替换弹层 -->
+                    <div id="emoji-search-popup">
+                        <input type="text" id="emoji-search-input" placeholder="搜索 emoji，如：fire、heart..." autocomplete="off">
+                        <div id="emoji-search-results"></div>
+                        <div id="emoji-search-status"></div>
+                    </div>
                 </div>
 
                 <div class="content-meta">
@@ -1562,7 +1656,6 @@
     const contentCounter = document.getElementById("content-counter");
     const emojiSuggest = document.getElementById("emoji-suggest");
     const emojiLabel = document.getElementById("emoji-label");
-    const emojiSwitchBtn = document.getElementById("emoji-switch-btn");
     const emojiChipList = document.getElementById("emoji-chip-list");
     const previewContents = document.querySelectorAll(".preview-content");
     const switchTabs = document.querySelectorAll(".switch-tab");
@@ -1637,15 +1730,6 @@
             palette: "linear-gradient(135deg, #d7e3f4, #f3d9d1)"
         }
     ];
-
-    const EMOJI_MAX_VISIBLE = 7;
-    const emojiPools = {
-        title: ["✨", "🔥", "💡", "🎯", "📌", "🌈", "💫", "✅", "⭐", "🧠", "📖", "🪄", "🎬", "📝"],
-        body: ["🌿", "📖", "🎧", "☁️", "🫧", "🕯️", "🌙", "🍵", "💭", "🧵", "🧩", "💬", "📷", "🪴"],
-        common: ["✨", "🌿", "💫", "🎧", "📖", "🫧", "☁️", "🔥", "💡", "🎯", "🌈", "✅", "⭐", "📝"]
-    };
-    let activeEmojiTarget = "title";
-    let emojiOffsetMap = { title: 0, body: 0, common: 0 };
 
     function drawDefaultBackground() {
         const gradient = coverCtx.createLinearGradient(0, 0, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
@@ -3404,121 +3488,207 @@
         }
     });
 
-    function getEmojiPoolKey() {
-        if (activeEmojiTarget === "body") return "body";
-        if (activeEmojiTarget === "title") return "title";
-        return "common";
-    }
+    // ── Emoji 系统：固定位置 + 光标追踪 + 单 chip 搜索替换 ──
+    const emojiPool = ["✨", "🔥", "💡", "🎯", "📌", "🌈", "💫", "🌿", "📖", "🎧", "☁️", "🪧", "🕯️", "🌙", "🍵", "💭", "🧵", "🧩", "📬", "📷", "🪴", "✅", "⭐", "🧠"];
+    // 当前展示的 chip emoji（可被替换）
+    let chipEmojis = emojiPool.slice(0, 7);
+    // 当前操作的 chip 索引（用于搜索替换）
+    let activeReplaceIdx = -1;
+    // 光标记忆：title 用 selectionStart/End，body 用 Range
+    let savedTitleSel = null;   // {start, end}
+    let savedBodyRange = null;  // Range
+    let lastFocusTarget = null; // 'title' | 'body'
 
-    function getVisibleEmojiList(poolKey) {
-        const pool = emojiPools[poolKey] || emojiPools.common;
-        const offset = emojiOffsetMap[poolKey] || 0;
-        if (pool.length <= EMOJI_MAX_VISIBLE) {
-            return pool.slice(0, EMOJI_MAX_VISIBLE);
-        }
-        const result = [];
-        for (let i = 0; i < EMOJI_MAX_VISIBLE; i++) {
-            result.push(pool[(offset + i) % pool.length]);
-        }
-        return result;
-    }
+    // 渲染 chip 列表
+    function renderEmojiChips() {
+        emojiChipList.innerHTML = '';
+        chipEmojis.forEach((emoji, idx) => {
+            const wrap = document.createElement('div');
+            wrap.className = 'emoji-chip-wrap';
 
-    function renderEmojiSuggest() {
-        const poolKey = getEmojiPoolKey();
-        emojiLabel.textContent = activeEmojiTarget === "body" ? "正文 emoji" : "标题 emoji";
-        emojiChipList.innerHTML = "";
-        getVisibleEmojiList(poolKey).forEach((emoji) => {
-            const chip = document.createElement("button");
-            chip.type = "button";
-            chip.className = "emoji-chip";
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'emoji-chip';
             chip.dataset.emoji = emoji;
+            chip.dataset.idx = idx;
             chip.textContent = emoji;
-            emojiChipList.appendChild(chip);
+
+            const replaceBtn = document.createElement('button');
+            replaceBtn.className = 'emoji-chip-replace-btn';
+            replaceBtn.type = 'button';
+            replaceBtn.title = '搜索替换';
+            replaceBtn.dataset.replaceIdx = idx;
+            replaceBtn.innerHTML = '🔍';
+            replaceBtn.style.fontSize = '9px';
+
+            wrap.appendChild(chip);
+            wrap.appendChild(replaceBtn);
+            emojiChipList.appendChild(wrap);
         });
     }
 
-    function placeEmojiSuggestForTarget(target) {
-        if (!target || !editorContentScroll) {
-            return;
+    renderEmojiChips();
+
+    // 光标保存：title
+    function saveTitleCaret() {
+        lastFocusTarget = 'title';
+        savedTitleSel = { start: workTitleInput.selectionStart, end: workTitleInput.selectionEnd };
+    }
+    // 光标保存：body
+    function saveBodyCaret() {
+        lastFocusTarget = 'body';
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount && workBodyInput.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+            savedBodyRange = sel.getRangeAt(0).cloneRange();
         }
-        if (target === workTitleInput) {
-            activeEmojiTarget = "title";
-            workTitleInput.insertAdjacentElement("afterend", emojiSuggest);
+    }
+
+    // 在保存的位置插入 emoji
+    function insertEmojiAtSavedPos(emoji) {
+        if (lastFocusTarget === 'title') {
+            const start = savedTitleSel ? savedTitleSel.start : workTitleInput.value.length;
+            const end   = savedTitleSel ? savedTitleSel.end   : workTitleInput.value.length;
+            const pre = workTitleInput.value.slice(0, start);
+            const suf = workTitleInput.value.slice(end);
+            workTitleInput.value = pre + emoji + suf;
+            const pos = start + [...emoji].length;
+            workTitleInput.focus();
+            workTitleInput.setSelectionRange(pos, pos);
+            savedTitleSel = { start: pos, end: pos };
+            syncPreviews();
         } else {
-            activeEmojiTarget = "body";
-            workBodyInput.insertAdjacentElement("beforebegin", emojiSuggest);
+            // 插入到 body的保存位置
+            workBodyInput.focus();
+            const sel = window.getSelection();
+            let range;
+            if (savedBodyRange && workBodyInput.contains(savedBodyRange.commonAncestorContainer)) {
+                range = savedBodyRange.cloneRange();
+            } else {
+                range = document.createRange();
+                range.selectNodeContents(workBodyInput);
+                range.collapse(false);
+            }
+            sel.removeAllRanges();
+            sel.addRange(range);
+            range.deleteContents();
+            const textNode = document.createTextNode(emoji);
+            range.insertNode(textNode);
+            range.setStartAfter(textNode);
+            range.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(range);
+            savedBodyRange = range.cloneRange();
+            syncPreviews();
         }
-        renderEmojiSuggest();
     }
 
-    function insertEmojiIntoTitle(emoji) {
-        const start = workTitleInput.selectionStart ?? workTitleInput.value.length;
-        const end = workTitleInput.selectionEnd ?? workTitleInput.value.length;
-        const prefix = workTitleInput.value.slice(0, start);
-        const suffix = workTitleInput.value.slice(end);
-        const spacer = prefix && !prefix.endsWith(" ") ? " " : "";
-        workTitleInput.value = `${prefix}${spacer}${emoji}${suffix}`;
-        const caret = (prefix + spacer + emoji).length;
-        workTitleInput.focus();
-        workTitleInput.setSelectionRange(caret, caret);
-    }
+    // 监听光标位置变化
+    workTitleInput.addEventListener('mouseup', saveTitleCaret);
+    workTitleInput.addEventListener('keyup', saveTitleCaret);
+    workTitleInput.addEventListener('focus', () => { lastFocusTarget = 'title'; });
+    workTitleInput.addEventListener('input', syncPreviews);
 
-    function insertEmojiIntoBody(emoji) {
-        workBodyInput.focus();
-        const selection = window.getSelection();
-        if (!selection || !selection.rangeCount) {
-            workBodyInput.append(emoji);
+    workBodyInput.addEventListener('mouseup', saveBodyCaret);
+    workBodyInput.addEventListener('keyup', saveBodyCaret);
+    workBodyInput.addEventListener('focus', () => { if (!savedBodyRange) lastFocusTarget = 'body'; });
+    workBodyInput.addEventListener('input', syncPreviews);
+
+    // 点击 chip 插入 emoji
+    emojiChipList.addEventListener('click', (e) => {
+        const replaceBtn = e.target.closest('[data-replace-idx]');
+        if (replaceBtn) {
+            // 开启搜索替换弹层
+            activeReplaceIdx = parseInt(replaceBtn.dataset.replaceIdx);
+            openEmojiSearch();
             return;
         }
-        let range = selection.getRangeAt(0);
-        if (!workBodyInput.contains(range.commonAncestorContainer)) {
-            range = document.createRange();
-            range.selectNodeContents(workBodyInput);
-            range.collapse(false);
-            selection.removeAllRanges();
-            selection.addRange(range);
+        const chip = e.target.closest('[data-emoji]');
+        if (chip) {
+            insertEmojiAtSavedPos(chip.dataset.emoji);
         }
-        const textNode = document.createTextNode(emoji);
-        range.insertNode(textNode);
-        range.setStartAfter(textNode);
-        range.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(range);
+    });
+
+    // ── 搜索替换弹层 ──
+    const emojiSearchPopup = document.getElementById('emoji-search-popup');
+    const emojiSearchInput = document.getElementById('emoji-search-input');
+    const emojiSearchResults = document.getElementById('emoji-search-results');
+    const emojiSearchStatus = document.getElementById('emoji-search-status');
+    let searchDebounceTimer = null;
+
+    function openEmojiSearch() {
+        emojiSearchPopup.classList.add('open');
+        emojiSearchInput.value = '';
+        emojiSearchResults.innerHTML = '';
+        emojiSearchStatus.textContent = '输入关键词搜索，如：fire、cat、heart';
+        setTimeout(() => emojiSearchInput.focus(), 50);
     }
 
-    workTitleInput.addEventListener("input", () => {
-        placeEmojiSuggestForTarget(workTitleInput);
-        syncPreviews();
-    });
-    workBodyInput.addEventListener("input", () => {
-        placeEmojiSuggestForTarget(workBodyInput);
-        syncPreviews();
-    });
-    workTitleInput.addEventListener("focus", () => placeEmojiSuggestForTarget(workTitleInput));
-    workBodyInput.addEventListener("focus", () => placeEmojiSuggestForTarget(workBodyInput));
-    workTitleInput.addEventListener("click", () => placeEmojiSuggestForTarget(workTitleInput));
-    workBodyInput.addEventListener("click", () => placeEmojiSuggestForTarget(workBodyInput));
-    workBodyInput.addEventListener("keyup", () => placeEmojiSuggestForTarget(workBodyInput));
+    function closeEmojiSearch() {
+        emojiSearchPopup.classList.remove('open');
+        activeReplaceIdx = -1;
+    }
 
-    emojiSwitchBtn.addEventListener("click", () => {
-        const poolKey = getEmojiPoolKey();
-        const poolLength = (emojiPools[poolKey] || emojiPools.common).length;
-        emojiOffsetMap[poolKey] = (emojiOffsetMap[poolKey] + EMOJI_MAX_VISIBLE) % Math.max(1, poolLength);
-        renderEmojiSuggest();
+    // 点击外部关闭
+    document.addEventListener('mousedown', (e) => {
+        if (!emojiSearchPopup.contains(e.target) && !e.target.closest('[data-replace-idx]')) {
+            closeEmojiSearch();
+        }
     });
 
-    emojiSuggest.addEventListener("click", (event) => {
-        const trigger = event.target.closest("[data-emoji]");
-        if (!trigger) {
+    // 将 htmlCode 数组转为 emoji 字符
+    function htmlCodesToEmoji(htmlCodes) {
+        return htmlCodes.map(code => {
+            const match = code.match(/&#(\d+);/);
+            if (match) return String.fromCodePoint(parseInt(match[1]));
+            return '';
+        }).join('');
+    }
+
+    emojiSearchInput.addEventListener('input', () => {
+        clearTimeout(searchDebounceTimer);
+        const q = emojiSearchInput.value.trim();
+        if (!q) {
+            emojiSearchResults.innerHTML = '';
+            emojiSearchStatus.textContent = '输入关键词搜索';
             return;
         }
-        const emoji = trigger.dataset.emoji;
-        if (activeEmojiTarget === "body") {
-            insertEmojiIntoBody(emoji);
-        } else {
-            insertEmojiIntoTitle(emoji);
-        }
-        syncPreviews();
+        emojiSearchStatus.textContent = '搜索中...';
+        searchDebounceTimer = setTimeout(async () => {
+            try {
+                const res = await fetch(`https://emojihub.yurace.pro/api/search?q=${encodeURIComponent(q)}`);
+                if (!res.ok) throw new Error('API error');
+                const data = await res.json();
+                emojiSearchResults.innerHTML = '';
+                if (!data.length) {
+                    emojiSearchStatus.textContent = '未找到相关 emoji';
+                    return;
+                }
+                emojiSearchStatus.textContent = `找到 ${data.length} 个，点击替换`;
+                data.slice(0, 30).forEach(item => {
+                    const emoji = htmlCodesToEmoji(item.htmlCode);
+                    if (!emoji) return;
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'emoji-result-item';
+                    btn.textContent = emoji;
+                    btn.title = item.name;
+                    btn.addEventListener('click', () => {
+                        if (activeReplaceIdx >= 0) {
+                            chipEmojis[activeReplaceIdx] = emoji;
+                            renderEmojiChips();
+                        }
+                        closeEmojiSearch();
+                    });
+                    emojiSearchResults.appendChild(btn);
+                });
+            } catch {
+                emojiSearchStatus.textContent = '搜索失败，请检查网络';
+            }
+        }, 400);
+    });
+
+    emojiSearchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeEmojiSearch();
     });
 
     function getPlainBodyText() {
