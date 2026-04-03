@@ -226,6 +226,10 @@
         z-index: 3;
     }
 
+    #cover-layer-stage {
+        display: none;
+    }
+
     .drag-guide {
         position: absolute;
         background: rgba(59, 130, 246, 0.55);
@@ -1068,6 +1072,20 @@
         background: #f1f5f9;
     }
 
+    .note-cover-preview.vector-editing {
+        outline: 2px solid rgba(59, 130, 246, 0.65);
+        outline-offset: -2px;
+    }
+
+    #note-layer-stage {
+        pointer-events: none;
+    }
+
+    .note-cover-preview.vector-editing #note-layer-stage {
+        pointer-events: auto;
+        z-index: 10;
+    }
+
     .note-cover-preview img,
     .discover-cover img {
         width: 100%;
@@ -1350,16 +1368,6 @@
                     <div class="cover-grid"></div>
                     <div class="cover-toolbar-tag">自动去字中枢</div>
                     
-                    <!-- 矢量画布编辑模式（iframe 嵌入 vector-canvas.html）-->
-                    <div id="vector-edit-mode" style="display:none;position:fixed;inset:0;z-index:9999;background:#0f0f10;flex-direction:column;">
-                        <div style="height:44px;background:#1a1a1c;border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;padding:0 16px;gap:10px;flex-shrink:0;">
-                            <span style="font-size:13px;font-weight:600;color:#ff6b7a;letter-spacing:.04em;">✦ 矢量画布编辑器</span>
-                            <div style="flex:1"></div>
-                            <button id="btn-vector-close" style="height:30px;padding:0 16px;background:#ff2442;border:none;border-radius:7px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;">完成并关闭</button>
-                        </div>
-                        <iframe id="vector-iframe" src="vector-canvas.html" style="flex:1;width:100%;border:none;display:block;"></iframe>
-                    </div>
-                    
                     <div class="cover-overlay" id="cover-overlay">
                         <div class="cover-layer-stage" id="cover-layer-stage"></div>
 
@@ -1624,7 +1632,6 @@
     const coverCtx = coverCanvas.getContext("2d", { willReadFrequently: true });
     const maskCanvas = document.getElementById("cover-mask-canvas");
     const maskCtx = maskCanvas.getContext("2d", { willReadFrequently: true });
-    const coverLayerStage = document.getElementById("cover-layer-stage");
     const coverLayerImageInput = document.getElementById("cover-layer-image-input");
     const addTextLayerBtn = document.getElementById("add-text-layer-btn");
     const addImageLayerBtn = document.getElementById("add-image-layer-btn");
@@ -1636,6 +1643,7 @@
     const layerList = document.getElementById("layer-list");
     const layerCount = document.getElementById("layer-count");
     const noteLayerStage = document.getElementById("note-layer-stage");
+    const noteCoverPreview = document.getElementById("note-cover-preview");
     const cleanupDot = document.getElementById("cleanup-dot");
     const cleanupStatus = document.getElementById("cleanup-status");
     const brushSizeInput = document.getElementById("brush-size");
@@ -1688,6 +1696,7 @@
         dragDirty: false,
         dragGuideX: null,
         dragGuideY: null,
+        vectorEditActive: false,
         transforming: false,
         transformHandle: "",
         transformStart: null,
@@ -1908,9 +1917,9 @@
         layerCount.textContent = `${coverState.layers.length} / 10 图层`;
     }
 
-    function applyTextLayerStyles(element, layer) {
+    function applyTextLayerStyles(element, layer, scale = 1) {
         element.style.fontFamily = layer.fontFamily;
-        element.style.fontSize = `${layer.fontSize}px`;
+        element.style.fontSize = `${layer.fontSize * scale}px`;
         element.style.fontWeight = String(layer.fontWeight);
         element.style.fontStyle = layer.fontStyle;
         element.style.textDecoration = layer.textDecoration;
@@ -1918,7 +1927,7 @@
         element.style.lineHeight = String(layer.lineHeight);
         element.style.letterSpacing = `${layer.letterSpacing}em`;
         element.style.color = layer.color;
-        element.style.width = `${layer.width}px`;
+        element.style.width = `${layer.width * scale}px`;
         element.style.transform = `rotate(${layer.rotation || 0}deg)`;
         element.style.transformOrigin = "center center";
     }
@@ -1930,21 +1939,16 @@
         if (layer.type === "image") {
             return { width: layer.width, height: layer.height };
         }
-
-        const node = coverLayerStage.querySelector(`.cover-layer[data-layer-id="${layer.id}"]`);
-        if (!node) {
-            return { width: layer.width, height: 120 };
-        }
-
+        const textMetrics = LayerGeometry.getTextLayerMetrics(layer);
         return {
-            width: node.offsetWidth || layer.width,
-            height: node.offsetHeight || 120
+            width: Math.max(1, textMetrics.width || layer.width || 1),
+            height: Math.max(1, textMetrics.height || 120)
         };
     }
 
-    function renderCoverTransformOverlay() {
+    function renderCoverTransformOverlay(stage, scaleX, scaleY) {
         const selected = getSelectedLayer();
-        if (!selected || coverState.editingText || coverState.retouchEnabled) {
+        if (!selected || coverState.editingText || coverState.retouchEnabled || !coverState.vectorEditActive) {
             return;
         }
 
@@ -1952,10 +1956,10 @@
         const overlay = document.createElement("div");
         overlay.className = "cover-transform-overlay";
         overlay.dataset.layerId = selected.id;
-        overlay.style.left = `${selected.x}px`;
-        overlay.style.top = `${selected.y}px`;
-        overlay.style.width = `${size.width}px`;
-        overlay.style.height = `${size.height}px`;
+        overlay.style.left = `${selected.x * scaleX}px`;
+        overlay.style.top = `${selected.y * scaleY}px`;
+        overlay.style.width = `${size.width * scaleX}px`;
+        overlay.style.height = `${size.height * scaleY}px`;
         overlay.style.transform = `rotate(${selected.rotation || 0}deg)`;
         overlay.style.transformOrigin = "center center";
 
@@ -1968,32 +1972,47 @@
             overlay.appendChild(dot);
         });
 
-        coverLayerStage.appendChild(overlay);
+        stage.appendChild(overlay);
     }
 
     function renderCoverLayers() {
-        coverLayerStage.innerHTML = "";
+        const stage = noteLayerStage;
+        if (!stage) {
+            return;
+        }
+        const baseWidth = Math.max(1, coverMakerCard.offsetWidth || 1);
+        const baseHeight = Math.max(1, coverMakerCard.offsetHeight || 1);
+        const stageWidth = Math.max(1, stage.clientWidth || 1);
+        const stageHeight = Math.max(1, stage.clientHeight || 1);
+        const scaleX = stageWidth / baseWidth;
+        const scaleY = stageHeight / baseHeight;
+        const fontScale = (scaleX + scaleY) / 2;
+
+        stage.innerHTML = "";
+        noteCoverPreview?.classList.toggle("vector-editing", coverState.vectorEditActive);
 
         coverState.layers.forEach((layer) => {
             const layerNode = document.createElement("div");
             layerNode.className = `cover-layer ${layer.type}-layer`;
             layerNode.dataset.layerId = layer.id;
-            layerNode.style.left = `${layer.x}px`;
-            layerNode.style.top = `${layer.y}px`;
+            layerNode.style.left = `${layer.x * scaleX}px`;
+            layerNode.style.top = `${layer.y * scaleY}px`;
             layerNode.style.zIndex = String(10 + coverState.layers.indexOf(layer));
+            layerNode.style.pointerEvents = coverState.vectorEditActive ? "auto" : "none";
+            layerNode.style.cursor = coverState.vectorEditActive ? "move" : "default";
 
-            if (layer.id === coverState.selectedLayerId) {
+            if (coverState.vectorEditActive && layer.id === coverState.selectedLayerId) {
                 layerNode.classList.add("selected");
             }
 
             if (layer.type === "text") {
-                layerNode.contentEditable = "true";
+                layerNode.contentEditable = coverState.vectorEditActive ? "true" : "false";
                 layerNode.spellcheck = false;
                 layerNode.textContent = layer.text;
-                applyTextLayerStyles(layerNode, layer);
+                applyTextLayerStyles(layerNode, layer, fontScale);
             } else {
-                layerNode.style.width = `${layer.width}px`;
-                layerNode.style.height = `${layer.height}px`;
+                layerNode.style.width = `${layer.width * scaleX}px`;
+                layerNode.style.height = `${layer.height * scaleY}px`;
                 layerNode.style.transform = `rotate(${layer.rotation || 0}deg)`;
                 layerNode.style.transformOrigin = "center center";
                 const img = document.createElement("img");
@@ -2002,27 +2021,10 @@
                 layerNode.appendChild(img);
             }
 
-            coverLayerStage.appendChild(layerNode);
+            stage.appendChild(layerNode);
         });
 
-        const verticalGuide = document.createElement("div");
-        verticalGuide.className = "drag-guide vertical";
-        verticalGuide.dataset.dragGuide = "vertical";
-        if (coverState.dragGuideX != null) {
-            verticalGuide.style.display = "block";
-            verticalGuide.style.left = `${coverState.dragGuideX}px`;
-        }
-        const horizontalGuide = document.createElement("div");
-        horizontalGuide.className = "drag-guide horizontal";
-        horizontalGuide.dataset.dragGuide = "horizontal";
-        if (coverState.dragGuideY != null) {
-            horizontalGuide.style.display = "block";
-            horizontalGuide.style.top = `${coverState.dragGuideY}px`;
-        }
-        coverLayerStage.appendChild(verticalGuide);
-        coverLayerStage.appendChild(horizontalGuide);
-
-        renderCoverTransformOverlay();
+        renderCoverTransformOverlay(stage, scaleX, scaleY);
     }
 
     function renderLayerList() {
@@ -2060,10 +2062,14 @@
     }
 
     function getPointerInStage(event) {
-        const stageRect = coverLayerStage.getBoundingClientRect();
+        const stageRect = noteLayerStage.getBoundingClientRect();
+        const baseWidth = Math.max(1, coverMakerCard.offsetWidth || 1);
+        const baseHeight = Math.max(1, coverMakerCard.offsetHeight || 1);
+        const relativeX = clamp((event.clientX - stageRect.left) / Math.max(1, stageRect.width), 0, 1);
+        const relativeY = clamp((event.clientY - stageRect.top) / Math.max(1, stageRect.height), 0, 1);
         return {
-            x: event.clientX - stageRect.left,
-            y: event.clientY - stageRect.top
+            x: relativeX * baseWidth,
+            y: relativeY * baseHeight
         };
     }
 
@@ -2207,46 +2213,10 @@
 
     const DragController = {
         showGuides(layer) {
-            const stageWidth = coverLayerStage.clientWidth;
-            const stageHeight = coverLayerStage.clientHeight;
-            const bounds = LayerGeometry.getLayerHitBounds(layer);
-            const centerX = bounds.x + bounds.width / 2;
-            const centerY = bounds.y + bounds.height / 2;
-            const snapDistance = 6;
-
-            const vertical = coverLayerStage.querySelector('[data-drag-guide="vertical"]');
-            const horizontal = coverLayerStage.querySelector('[data-drag-guide="horizontal"]');
-            if (!vertical || !horizontal) {
-                return;
-            }
-
-            if (Math.abs(centerX - stageWidth / 2) <= snapDistance) {
-                vertical.style.display = "block";
-                vertical.style.left = `${stageWidth / 2}px`;
-                coverState.dragGuideX = stageWidth / 2;
-            } else {
-                vertical.style.display = "none";
-                coverState.dragGuideX = null;
-            }
-
-            if (Math.abs(centerY - stageHeight / 2) <= snapDistance) {
-                horizontal.style.display = "block";
-                horizontal.style.top = `${stageHeight / 2}px`;
-                coverState.dragGuideY = stageHeight / 2;
-            } else {
-                horizontal.style.display = "none";
-                coverState.dragGuideY = null;
-            }
+            coverState.dragGuideX = null;
+            coverState.dragGuideY = null;
         },
         hideGuides() {
-            const vertical = coverLayerStage.querySelector('[data-drag-guide="vertical"]');
-            const horizontal = coverLayerStage.querySelector('[data-drag-guide="horizontal"]');
-            if (vertical) {
-                vertical.style.display = "none";
-            }
-            if (horizontal) {
-                horizontal.style.display = "none";
-            }
             coverState.dragGuideX = null;
             coverState.dragGuideY = null;
         },
@@ -3130,8 +3100,8 @@
     document.getElementById("cover-avatar").addEventListener("input", syncPreviews);
     document.getElementById("cover-author").addEventListener("input", syncPreviews);
 
-    coverLayerStage.addEventListener("pointerdown", (event) => {
-        if (coverState.retouchEnabled) {
+    noteLayerStage.addEventListener("pointerdown", (event) => {
+        if (!coverState.vectorEditActive || coverState.retouchEnabled) {
             return;
         }
 
@@ -3149,7 +3119,7 @@
             if (!beginLayerTransform(layer, handle.dataset.handle, event)) {
                 return;
             }
-            coverLayerStage.setPointerCapture(event.pointerId);
+            noteLayerStage.setPointerCapture(event.pointerId);
             event.preventDefault();
             return;
         }
@@ -3160,7 +3130,7 @@
             if (selected && LayerGeometry.canDragLayer(selected)) {
                 const point = getPointerInStage(event);
                 if (LayerGeometry.hitTestLayerAtPoint(selected, point) && DragController.begin(selected, point)) {
-                    coverLayerStage.setPointerCapture(event.pointerId);
+                    noteLayerStage.setPointerCapture(event.pointerId);
                     event.preventDefault();
                     return;
                 }
@@ -3199,11 +3169,14 @@
         if (!DragController.begin(layer, point)) {
             return;
         }
-        coverLayerStage.setPointerCapture(event.pointerId);
+        noteLayerStage.setPointerCapture(event.pointerId);
         event.preventDefault();
     });
 
-    coverLayerStage.addEventListener("pointermove", (event) => {
+    noteLayerStage.addEventListener("pointermove", (event) => {
+        if (!coverState.vectorEditActive) {
+            return;
+        }
         if (coverState.transforming) {
             applyLayerTransform(event);
             return;
@@ -3215,12 +3188,18 @@
         DragController.apply(event);
     });
 
-    coverLayerStage.addEventListener("pointerup", () => {
+    noteLayerStage.addEventListener("pointerup", () => {
+        if (!coverState.vectorEditActive) {
+            return;
+        }
         DragController.end();
         stopLayerTransform();
     });
 
-    coverLayerStage.addEventListener("dblclick", (event) => {
+    noteLayerStage.addEventListener("dblclick", (event) => {
+        if (!coverState.vectorEditActive) {
+            return;
+        }
         const node = event.target.closest(".cover-layer.text-layer");
         if (!node) return;
         node.classList.add("editing");
@@ -3228,15 +3207,21 @@
         document.getSelection()?.selectAllChildren(node);
     });
 
-    coverLayerStage.addEventListener("focusin", (event) => {
+    noteLayerStage.addEventListener("focusin", (event) => {
+        if (!coverState.vectorEditActive) {
+            return;
+        }
         const node = event.target.closest(".cover-layer.text-layer");
         if (!node) return;
         coverState.editingText = true;
         node.classList.add("editing");
-        coverLayerStage.querySelector(".cover-transform-overlay")?.remove();
+        noteLayerStage.querySelector(".cover-transform-overlay")?.remove();
     });
 
-    coverLayerStage.addEventListener("focusout", (event) => {
+    noteLayerStage.addEventListener("focusout", (event) => {
+        if (!coverState.vectorEditActive) {
+            return;
+        }
         const node = event.target.closest(".cover-layer.text-layer");
         if (!node) return;
         coverState.editingText = false;
@@ -3244,7 +3229,10 @@
         renderCoverLayers();
     });
 
-    coverLayerStage.addEventListener("input", (event) => {
+    noteLayerStage.addEventListener("input", (event) => {
+        if (!coverState.vectorEditActive) {
+            return;
+        }
         const node = event.target.closest(".cover-layer.text-layer");
         if (!node) return;
         const layer = coverState.layers.find((item) => item.id === node.dataset.layerId);
@@ -3263,26 +3251,12 @@
     });
 
     noteLayerStage.addEventListener("click", (event) => {
+        if (!coverState.vectorEditActive) {
+            return;
+        }
         const node = event.target.closest(".cover-layer");
         if (!node) return;
         selectLayer(node.dataset.layerId);
-    });
-
-    noteLayerStage.addEventListener("input", (event) => {
-        const node = event.target.closest(".cover-layer.text-layer");
-        if (!node) return;
-        const layer = coverState.layers.find((item) => item.id === node.dataset.layerId);
-        if (!layer) return;
-        layer.text = node.innerText;
-        layer.name = (node.innerText.trim() || "文字图层").slice(0, 12);
-        syncLayerVector(layer);
-        renderLayerList();
-    });
-
-    noteLayerStage.addEventListener("focusout", (event) => {
-        const node = event.target.closest(".cover-layer.text-layer");
-        if (!node) return;
-        syncPreviews();
     });
 
     addTextLayerBtn.addEventListener("click", () => {
@@ -4052,7 +4026,13 @@
     }
 
     function renderPreviewLayers(container, layers, width, height) {
+        if (container.id === "note-layer-stage") {
+            renderCoverLayers();
+            return;
+        }
+
         container.innerHTML = "";
+        const baseWidth = Math.max(1, coverMakerCard.offsetWidth || 1);
 
         layers.forEach((layer) => {
             const node = document.createElement("div");
@@ -4073,7 +4053,7 @@
                 node.textContent = layer.text;
                 node.style.width = `${Math.min(layer.widthRatio * width, width - safeLeft)}px`;
                 node.style.fontFamily = layer.fontFamily;
-                node.style.fontSize = `${layer.fontSize * (width / coverMakerCard.offsetWidth)}px`;
+                node.style.fontSize = `${layer.fontSize * (width / baseWidth)}px`;
                 node.style.fontWeight = String(layer.fontWeight);
                 node.style.fontStyle = layer.fontStyle;
                 node.style.textDecoration = layer.textDecoration;
@@ -4082,7 +4062,7 @@
                 node.style.letterSpacing = `${layer.letterSpacing}em`;
                 node.style.color = layer.color;
                 node.style.whiteSpace = "pre-wrap";
-                node.contentEditable = container.id === "note-layer-stage" ? "true" : "false";
+                node.contentEditable = "false";
             } else {
                 node.style.width = `${Math.min(layer.widthRatio * width, width - safeLeft)}px`;
                 node.style.height = `${Math.min(layer.heightRatio * height, height - safeTop)}px`;
@@ -4167,6 +4147,10 @@
             previewContents.forEach((item) => item.classList.remove("active"));
             tab.classList.add("active");
             document.getElementById(tab.dataset.view).classList.add("active");
+            if (tab.dataset.view !== "note-p" && coverState.vectorEditActive) {
+                setVectorEditActive(false);
+            }
+            syncPreviews();
         });
     });
 
@@ -4273,22 +4257,41 @@
     }
 
     window.addEventListener("resize", syncPreviews);
-    
-    // ── 矢量编辑器（通过 iframe 嵌入 vector-canvas.html）──
-    window.addEventListener("DOMContentLoaded", () => {
-        const vectorEditMode = document.getElementById('vector-edit-mode');
-        const vectorEditBtn = document.getElementById('vector-edit-btn');
-        const btnClose = document.getElementById('btn-vector-close');
-        if (!vectorEditMode || !vectorEditBtn || !btnClose) return;
-        
-        vectorEditBtn.addEventListener('click', () => {
-            vectorEditMode.style.display = 'flex';
-        });
-        
-        btnClose.addEventListener('click', () => {
-            vectorEditMode.style.display = 'none';
-        });
-    }, { once: true });
+
+    function setVectorEditActive(active) {
+        const next = Boolean(active);
+        if (coverState.vectorEditActive === next) {
+            return;
+        }
+        coverState.vectorEditActive = next;
+        coverState.editingText = false;
+        DragController.end();
+        stopLayerTransform();
+        if (next) {
+            document.querySelector('.switch-tab[data-view="note-p"]')?.click();
+        }
+        vectorEditBtn.style.background = next ? "#1f2937" : "#ff2442";
+        vectorEditBtn.textContent = next ? "✓ 完成编辑" : "✦ 矢量编辑";
+        renderCoverLayers();
+        syncPreviews();
+    }
+
+    vectorEditBtn.addEventListener("click", () => {
+        setVectorEditActive(!coverState.vectorEditActive);
+    });
+
+    document.addEventListener("mousedown", (event) => {
+        if (!coverState.vectorEditActive) {
+            return;
+        }
+        if (
+            noteCoverPreview?.contains(event.target) ||
+            vectorEditBtn.contains(event.target)
+        ) {
+            return;
+        }
+        setVectorEditActive(false);
+    });
     
     window.addEventListener("DOMContentLoaded", initializeEditorPreview, { once: true });
     window.addEventListener("load", initializeEditorPreview, { once: true });
