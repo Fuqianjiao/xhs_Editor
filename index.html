@@ -3617,12 +3617,100 @@
     const emojiSearchResults = document.getElementById('emoji-search-results');
     const emojiSearchStatus = document.getElementById('emoji-search-status');
     let searchDebounceTimer = null;
+    const emojiKeywordLibrary = [
+        { emoji: "✨", keywords: ["sparkles", "sparkle", "shine", "star", "闪光", "闪亮", "星星"] },
+        { emoji: "🔥", keywords: ["fire", "hot", "burn", "flame", "火", "火焰", "燃", "热"] },
+        { emoji: "💡", keywords: ["idea", "light", "bulb", "灵感", "想法", "点子", "灯泡"] },
+        { emoji: "🎯", keywords: ["target", "goal", "bullseye", "目标", "命中", "精准"] },
+        { emoji: "📌", keywords: ["pin", "pushpin", "mark", "置顶", "标记", "图钉"] },
+        { emoji: "🌈", keywords: ["rainbow", "color", "彩虹", "多彩"] },
+        { emoji: "💫", keywords: ["dizzy", "star", "magic", "旋转", "星光", "魔法"] },
+        { emoji: "🌿", keywords: ["leaf", "green", "nature", "plant", "树叶", "叶子", "自然", "植物"] },
+        { emoji: "📖", keywords: ["book", "read", "reading", "书", "读书", "阅读"] },
+        { emoji: "🎧", keywords: ["music", "headphone", "audio", "耳机", "音乐"] },
+        { emoji: "☁️", keywords: ["cloud", "sky", "天气", "云", "白云"] },
+        { emoji: "🕯️", keywords: ["candle", "light", "蜡烛"] },
+        { emoji: "🌙", keywords: ["moon", "night", "月亮", "夜晚"] },
+        { emoji: "🍵", keywords: ["tea", "drink", "茶", "喝茶"] },
+        { emoji: "💭", keywords: ["thought", "thinking", "想法", "思考"] },
+        { emoji: "🧵", keywords: ["thread", "line", "线", "串联"] },
+        { emoji: "🧩", keywords: ["puzzle", "piece", "拼图"] },
+        { emoji: "📬", keywords: ["mailbox", "mail", "post", "邮箱", "信箱", "邮件"] },
+        { emoji: "📷", keywords: ["camera", "photo", "拍照", "相机", "照片"] },
+        { emoji: "🪴", keywords: ["plant", "pot", "盆栽", "绿植"] },
+        { emoji: "✅", keywords: ["done", "check", "ok", "完成", "通过", "确认"] },
+        { emoji: "⭐", keywords: ["star", "favorite", "collect", "收藏", "星标"] },
+        { emoji: "🧠", keywords: ["brain", "smart", "mind", "大脑", "聪明", "思维"] },
+        { emoji: "❤️", keywords: ["heart", "love", "爱心", "喜欢", "爱"] },
+        { emoji: "😊", keywords: ["smile", "happy", "开心", "微笑"] },
+        { emoji: "😂", keywords: ["laugh", "funny", "笑哭", "搞笑"] },
+        { emoji: "😭", keywords: ["cry", "sad", "难过", "流泪"] },
+        { emoji: "👍", keywords: ["like", "good", "赞", "点赞"] },
+        { emoji: "👏", keywords: ["clap", "applause", "鼓掌"] }
+    ];
+    const zhToEnSearchAlias = {
+        "火": "fire", "火焰": "fire", "爱心": "heart", "爱": "love", "喜欢": "heart",
+        "笑": "smile", "笑哭": "joy", "哭": "cry", "难过": "sad", "开心": "happy",
+        "星": "star", "星星": "star", "闪光": "sparkles", "灵感": "idea",
+        "书": "book", "读书": "reading", "耳机": "headphone", "音乐": "music",
+        "云": "cloud", "月亮": "moon", "茶": "tea", "相机": "camera",
+        "拍照": "photo", "盆栽": "plant", "植物": "plant", "目标": "target",
+        "置顶": "pushpin", "标记": "pin", "彩虹": "rainbow", "拼图": "puzzle",
+        "邮箱": "mailbox", "邮件": "mail", "大脑": "brain", "聪明": "smart",
+        "通过": "check", "确认": "check"
+    };
+
+    function normKeyword(value) {
+        return (value || "").toString().trim().toLowerCase().replace(/\s+/g, "");
+    }
+
+    function toApiQuery(rawQuery) {
+        const q = rawQuery.trim().toLowerCase();
+        if (!q) return q;
+        if (zhToEnSearchAlias[q]) return zhToEnSearchAlias[q];
+        for (const [zh, en] of Object.entries(zhToEnSearchAlias)) {
+            if (q.includes(zh)) return en;
+        }
+        return q;
+    }
+
+    function getLocalEmojiMatches(rawQuery) {
+        const qn = normKeyword(rawQuery);
+        if (!qn) return [];
+        return emojiKeywordLibrary
+            .filter(item => item.keywords.some(k => {
+                const kn = normKeyword(k);
+                return kn.includes(qn) || qn.includes(kn);
+            }))
+            .map(item => item.emoji);
+    }
+
+    function renderEmojiSearchResults(emojiList, titleMap = {}) {
+        emojiSearchResults.innerHTML = '';
+        const unique = [...new Set(emojiList)].slice(0, 40);
+        unique.forEach(emoji => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'emoji-result-item';
+            btn.textContent = emoji;
+            btn.title = titleMap[emoji] || 'emoji';
+            btn.addEventListener('click', () => {
+                if (activeReplaceIdx >= 0) {
+                    chipEmojis[activeReplaceIdx] = emoji;
+                    renderEmojiChips();
+                }
+                closeEmojiSearch();
+            });
+            emojiSearchResults.appendChild(btn);
+        });
+        return unique.length;
+    }
 
     function openEmojiSearch() {
         emojiSearchPopup.classList.add('open');
         emojiSearchInput.value = '';
         emojiSearchResults.innerHTML = '';
-        emojiSearchStatus.textContent = '输入关键词搜索，如：fire、cat、heart';
+        emojiSearchStatus.textContent = '输入关键词搜索（中英都支持），如：fire / heart / 火 / 爱心';
         setTimeout(() => emojiSearchInput.focus(), 50);
     }
 
@@ -3652,40 +3740,36 @@
         const q = emojiSearchInput.value.trim();
         if (!q) {
             emojiSearchResults.innerHTML = '';
-            emojiSearchStatus.textContent = '输入关键词搜索';
+            emojiSearchStatus.textContent = '输入关键词搜索（中英都支持）';
             return;
         }
-        emojiSearchStatus.textContent = '搜索中...';
+        const localMatches = getLocalEmojiMatches(q);
+        const localCount = renderEmojiSearchResults(localMatches);
+        emojiSearchStatus.textContent = localCount > 0
+            ? `本地找到 ${localCount} 个，继续为你补充更多结果...`
+            : '搜索中...';
         searchDebounceTimer = setTimeout(async () => {
             try {
-                const res = await fetch(`https://emojihub.yurace.pro/api/search?q=${encodeURIComponent(q)}`);
+                const apiQuery = toApiQuery(q);
+                const res = await fetch(`https://emojihub.yurace.pro/api/search?q=${encodeURIComponent(apiQuery)}`);
                 if (!res.ok) throw new Error('API error');
                 const data = await res.json();
-                emojiSearchResults.innerHTML = '';
-                if (!data.length) {
-                    emojiSearchStatus.textContent = '未找到相关 emoji';
-                    return;
-                }
-                emojiSearchStatus.textContent = `找到 ${data.length} 个，点击替换`;
-                data.slice(0, 30).forEach(item => {
+                const remoteEmojis = [];
+                const titleMap = {};
+                data.slice(0, 40).forEach(item => {
                     const emoji = htmlCodesToEmoji(item.htmlCode);
                     if (!emoji) return;
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'emoji-result-item';
-                    btn.textContent = emoji;
-                    btn.title = item.name;
-                    btn.addEventListener('click', () => {
-                        if (activeReplaceIdx >= 0) {
-                            chipEmojis[activeReplaceIdx] = emoji;
-                            renderEmojiChips();
-                        }
-                        closeEmojiSearch();
-                    });
-                    emojiSearchResults.appendChild(btn);
+                    remoteEmojis.push(emoji);
+                    if (item.name) titleMap[emoji] = item.name;
                 });
+                const totalCount = renderEmojiSearchResults([...localMatches, ...remoteEmojis], titleMap);
+                emojiSearchStatus.textContent = totalCount > 0
+                    ? `找到 ${totalCount} 个，点击即可替换`
+                    : '未找到相关 emoji';
             } catch {
-                emojiSearchStatus.textContent = '搜索失败，请检查网络';
+                emojiSearchStatus.textContent = localCount > 0
+                    ? `本地找到 ${localCount} 个（网络不可用，已展示本地结果）`
+                    : '搜索失败，请检查网络';
             }
         }, 400);
     });
