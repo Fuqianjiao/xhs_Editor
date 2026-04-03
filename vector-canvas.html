@@ -826,7 +826,9 @@ function loadFromBridge(){
 }
 
 function applyToIndexAndBack(){
+  const isBridgeBg=(o)=>o&&o.type==='IMAGE'&&o.locked&&Math.abs((o.x||0))<1&&Math.abs((o.y||0))<1&&Math.abs((o.w||0)-canvas.width)<2&&Math.abs((o.h||0)-canvas.height)<2;
   const layers=objects
+    .filter(o=>!isBridgeBg(o))
     .map(o=>vectorObjectToIndexLayer(o,canvas.width,canvas.height,bridgeState.targetStageWidth,bridgeState.targetStageHeight))
     .filter(Boolean)
     .slice(0,10);
@@ -835,13 +837,14 @@ function applyToIndexAndBack(){
     timestamp:Date.now(),
     stageWidth:bridgeState.targetStageWidth,
     stageHeight:bridgeState.targetStageHeight,
-    layers,
-    backgroundDataUrl:exportSceneToDataUrl(1080,1440)
+    layers
   };
   try{
     localStorage.setItem(VECTOR_BRIDGE_RESULT_KEY,JSON.stringify(result));
   }catch(error){
     console.error('bridge result save failed',error);
+    toast('应用失败：浏览器存储不足，请先删减图层后重试');
+    return;
   }
   window.location.href='index.html';
 }

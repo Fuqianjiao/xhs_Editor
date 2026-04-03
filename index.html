@@ -4312,12 +4312,17 @@
 
     function restoreVectorBridgeResult() {
         let payload = null;
+        let payloadFromIndex = null;
         try {
             const raw = localStorage.getItem(VECTOR_BRIDGE_RESULT_KEY);
             if (!raw) {
                 return;
             }
             payload = JSON.parse(raw);
+            const rawPayload = localStorage.getItem(VECTOR_BRIDGE_PAYLOAD_KEY);
+            if (rawPayload) {
+                payloadFromIndex = JSON.parse(rawPayload);
+            }
         } catch (error) {
             console.error("vector bridge result parse failed:", error);
             localStorage.removeItem(VECTOR_BRIDGE_RESULT_KEY);
@@ -4339,8 +4344,9 @@
             coverState.selectedLayerId = coverState.layers[coverState.layers.length - 1]?.id || "";
         }
 
-        if (payload.backgroundDataUrl) {
-            loadImage(payload.backgroundDataUrl).then((img) => {
+        const bgDataUrl = payload.backgroundDataUrl || payloadFromIndex?.backgroundDataUrl || "";
+        if (bgDataUrl) {
+            loadImage(bgDataUrl).then((img) => {
                 coverCtx.clearRect(0, 0, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
                 coverCtx.drawImage(img, 0, 0, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
                 coverState.displayImageDataUrl = getCanvasDataUrl();
