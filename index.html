@@ -1617,6 +1617,8 @@
 <div id="startup-tip" class="startup-tip">页面初始化中… 若超过3秒仍白屏，请刷新并截图控制台报错。</div>
 
 <script>
+    const VECTOR_BRIDGE_PAYLOAD_KEY = "XHS_VECTOR_BRIDGE_PAYLOAD";
+    const VECTOR_BRIDGE_RESULT_KEY = "XHS_VECTOR_BRIDGE_RESULT";
     const startupTip = document.getElementById("startup-tip");
     const showStartupTipTimer = window.setTimeout(() => {
         startupTip?.classList.add("show");
@@ -4264,6 +4266,7 @@
         renderBackgroundIndicators();
         syncPreviews();
         CoverHistory.push();
+        restoreVectorBridgeResult();
         hideStartupTip();
     }
 
@@ -4287,9 +4290,73 @@
         syncPreviews();
     }
 
-    vectorEditBtn.addEventListener("click", () => {
-        setVectorEditActive(!coverState.vectorEditActive);
-    });
+    function createVectorBridgePayload() {
+        return {
+            origin: "index",
+            timestamp: Date.now(),
+            stageWidth: Math.max(1, coverMakerCard.offsetWidth || 1),
+            stageHeight: Math.max(1, coverMakerCard.offsetHeight || 1),
+            backgroundDataUrl: coverState.displayImageDataUrl || getCanvasDataUrl(),
+            layers: coverState.layers.map((layer) => JSON.parse(JSON.stringify(layer)))
+        };
+    }
+
+    function openVectorCanvasPage() {
+        try {
+            localStorage.setItem(VECTOR_BRIDGE_PAYLOAD_KEY, JSON.stringify(createVectorBridgePayload()));
+        } catch (error) {
+            console.error("vector bridge payload save failed:", error);
+        }
+        window.location.href = "vector-canvas.html";
+    }
+
+    function restoreVectorBridgeResult() {
+        let payload = null;
+        try {
+            const raw = localStorage.getItem(VECTOR_BRIDGE_RESULT_KEY);
+            if (!raw) {
+                return;
+            }
+            payload = JSON.parse(raw);
+        } catch (error) {
+            console.error("vector bridge result parse failed:", error);
+            localStorage.removeItem(VECTOR_BRIDGE_RESULT_KEY);
+            return;
+        }
+        localStorage.removeItem(VECTOR_BRIDGE_RESULT_KEY);
+        localStorage.removeItem(VECTOR_BRIDGE_PAYLOAD_KEY);
+
+        if (!payload || payload.origin !== "vector") {
+            return;
+        }
+
+        if (Array.isArray(payload.layers)) {
+            coverState.layers = payload.layers.slice(0, 10).map((layer) => ({
+                ...layer,
+                id: layer.id || createLayerId()
+            }));
+            coverState.layers.forEach((layer) => syncLayerVector(layer));
+            coverState.selectedLayerId = coverState.layers[coverState.layers.length - 1]?.id || "";
+        }
+
+        if (payload.backgroundDataUrl) {
+            loadImage(payload.backgroundDataUrl).then((img) => {
+                coverCtx.clearRect(0, 0, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
+                coverCtx.drawImage(img, 0, 0, COVER_CANVAS_WIDTH, COVER_CANVAS_HEIGHT);
+                coverState.displayImageDataUrl = getCanvasDataUrl();
+                syncPreviews();
+            }).catch((error) => {
+                console.error("vector background restore failed:", error);
+            });
+        }
+
+        syncCoverEditorControls();
+        renderLayerList();
+        syncPreviews();
+        CoverHistory.push();
+    }
+
+    vectorEditBtn.addEventListener("click", openVectorCanvasPage);
 
     document.addEventListener("mousedown", (event) => {
         if (!coverState.vectorEditActive) {

@@ -89,6 +89,7 @@ body { font-family: -apple-system,'PingFang SC','Helvetica Neue',sans-serif; bac
   <button class="tb-btn" id="btn-zoom-fit">适应</button>
   <div class="tb-sep"></div>
   <button class="tb-btn" id="btn-save"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>保存</button>
+  <button class="tb-btn" id="btn-apply-back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18"/><path d="m13 5 7 7-7 7"/></svg>应用并返回</button>
   <label class="tb-btn" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>加载<input type="file" id="imp-json" accept=".json" style="display:none"></label>
   <button class="tb-btn" id="btn-png"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>导出PNG</button>
   <div class="tb-sep"></div>
@@ -171,6 +172,9 @@ body { font-family: -apple-system,'PingFang SC','Helvetica Neue',sans-serif; bac
 <div id="toast"></div>
 
 <script>
+const VECTOR_BRIDGE_PAYLOAD_KEY='XHS_VECTOR_BRIDGE_PAYLOAD';
+const VECTOR_BRIDGE_RESULT_KEY='XHS_VECTOR_BRIDGE_RESULT';
+
 // ── State ──
 let objects=[], selectedId=null, history=[], redoStack=[];
 let tool='SELECT', fillMode='stroke';
@@ -184,6 +188,7 @@ let rotateStartAngle=0, rotateObjStartRot=0;
 let editingTextId=null, spaceDown=false;
 let _uid=0;
 const uid=()=>'o'+(++_uid);
+const bridgeState={loaded:false,targetStageWidth:360,targetStageHeight:480};
 
 // ── Canvas setup ──
 const canvas=document.getElementById('canvas');
@@ -647,6 +652,7 @@ document.getElementById('btn-save').addEventListener('click',()=>{
   const a=document.createElement('a');a.href='data:application/json;charset=utf-8,'+encodeURIComponent(data);
   a.download='canvas.json';a.click();toast('已保存 JSON');
 });
+document.getElementById('btn-apply-back').addEventListener('click',applyToIndexAndBack);
 document.getElementById('imp-json').addEventListener('change',e=>{
   const file=e.target.files[0];if(!file)return;
   const r=new FileReader();
@@ -679,19 +685,183 @@ document.getElementById('btn-png').addEventListener('click',()=>{
 let toastT;
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),1800);}
 
+function indexLayerToVectorObject(layer,srcW,srcH,dstW,dstH){
+  if(!layer||!layer.type)return null;
+  const sx=dstW/Math.max(1,srcW),sy=dstH/Math.max(1,srcH);
+  const type=String(layer.type).toLowerCase();
+  if(type==='text'){
+    const fontSize=Math.max(8,Math.round((Number(layer.fontSize)||20)*((sx+sy)/2)));
+    return{
+      id:layer.id||uid(),
+      type:'TEXT',
+      x:(Number(layer.x)||0)*sx,
+      y:((Number(layer.y)||0)+(Number(layer.fontSize)||20))*sy,
+      text:layer.text||'',
+      fontSize,
+      color:layer.color||'#f0efff',
+      bold:Number(layer.fontWeight)>=700,
+      italic:String(layer.fontStyle||'normal')==='italic',
+      opacity:1,visible:layer.visible!==false,locked:!!layer.locked,
+      rotation:(Number(layer.rotation)||0)*Math.PI/180
+    };
+  }
+  if(type==='image'&&layer.src){
+    return{
+      id:layer.id||uid(),
+      type:'IMAGE',
+      x:(Number(layer.x)||0)*sx,
+      y:(Number(layer.y)||0)*sy,
+      w:Math.max(4,(Number(layer.width)||80)*sx),
+      h:Math.max(4,(Number(layer.height)||80)*sy),
+      src:layer.src,
+      opacity:1,visible:layer.visible!==false,locked:!!layer.locked,
+      rotation:(Number(layer.rotation)||0)*Math.PI/180
+    };
+  }
+  return null;
+}
+
+function vectorObjectToIndexLayer(o,srcW,srcH,dstW,dstH){
+  if(!o||o.visible===false)return null;
+  const sx=dstW/Math.max(1,srcW),sy=dstH/Math.max(1,srcH);
+  if(o.type==='TEXT'){
+    const fontPx=Math.max(8,Number(o.fontSize)||20);
+    const backFontSize=Math.max(12,fontPx/((sx+sy)/2));
+    ctx.save();
+    ctx.font=`${o.italic?'italic ':''} ${o.bold?'bold ':''} ${fontPx}px sans-serif`;
+    const tw=ctx.measureText(o.text||' ').width;
+    ctx.restore();
+    return{
+      id:o.id||uid(),
+      type:'text',
+      name:(o.text||'文字图层').slice(0,12),
+      text:o.text||'',
+      x:(Number(o.x)||0)*sx,
+      y:((Number(o.y)||0)-fontPx)*sy,
+      width:Math.max(80,tw*sx),
+      fontFamily:'PingFang SC, Hiragino Sans GB, Microsoft Yahei, sans-serif',
+      fontSize:backFontSize,
+      fontWeight:o.bold?700:500,
+      fontStyle:o.italic?'italic':'normal',
+      textDecoration:'none',
+      textAlign:'left',
+      lineHeight:1.18,
+      letterSpacing:-0.04,
+      color:o.color||'#101114',
+      rotation:(Number(o.rotation)||0)*180/Math.PI,
+      locked:!!o.locked
+    };
+  }
+  if(o.type==='IMAGE'&&o.src){
+    return{
+      id:o.id||uid(),
+      type:'image',
+      name:'图片图层',
+      src:o.src,
+      x:(Number(o.x)||0)*sx,
+      y:(Number(o.y)||0)*sy,
+      width:Math.max(4,(Number(o.w)||20)*sx),
+      height:Math.max(4,(Number(o.h)||20)*sy),
+      rotation:(Number(o.rotation)||0)*180/Math.PI,
+      locked:!!o.locked
+    };
+  }
+  return null;
+}
+
+function exportSceneToDataUrl(width,height){
+  const tw=Math.max(1,Math.round(width));
+  const th=Math.max(1,Math.round(height));
+  const tc=document.createElement('canvas');
+  tc.width=tw;tc.height=th;
+  const c=tc.getContext('2d');
+  c.clearRect(0,0,tw,th);
+  c.save();
+  c.scale(tw/Math.max(1,canvas.width),th/Math.max(1,canvas.height));
+  objects.forEach(o=>{if(o.visible!==false)drawObj(c,o);});
+  c.restore();
+  return tc.toDataURL('image/png');
+}
+
+function loadFromBridge(){
+  let payload=null;
+  try{
+    const raw=localStorage.getItem(VECTOR_BRIDGE_PAYLOAD_KEY);
+    if(!raw)return false;
+    payload=JSON.parse(raw);
+  }catch{return false;}
+  if(!payload||payload.origin!=='index')return false;
+
+  bridgeState.loaded=true;
+  bridgeState.targetStageWidth=Math.max(1,Number(payload.stageWidth)||360);
+  bridgeState.targetStageHeight=Math.max(1,Number(payload.stageHeight)||480);
+
+  const dstW=Math.max(1,canvas.width),dstH=Math.max(1,canvas.height);
+  const srcW=bridgeState.targetStageWidth,srcH=bridgeState.targetStageHeight;
+  objects=[];
+
+  if(payload.backgroundDataUrl){
+    const bg={id:uid(),type:'IMAGE',x:0,y:0,w:dstW,h:dstH,src:payload.backgroundDataUrl,opacity:1,visible:true,locked:true};
+    const bgImg=new Image();
+    bgImg.onload=()=>{bg.img=bgImg;render();};
+    bgImg.src=payload.backgroundDataUrl;
+    objects.push(bg);
+  }
+
+  (payload.layers||[]).forEach(layer=>{
+    const obj=indexLayerToVectorObject(layer,srcW,srcH,dstW,dstH);
+    if(!obj)return;
+    if(obj.type==='IMAGE'&&obj.src){
+      const img=new Image();
+      img.onload=()=>{obj.img=img;render();};
+      img.src=obj.src;
+    }
+    objects.push(obj);
+  });
+
+  selectedId=objects[objects.length-1]?.id||null;
+  render();syncPanel();syncLayers();
+  toast('已载入主编辑器图层');
+  return true;
+}
+
+function applyToIndexAndBack(){
+  const layers=objects
+    .map(o=>vectorObjectToIndexLayer(o,canvas.width,canvas.height,bridgeState.targetStageWidth,bridgeState.targetStageHeight))
+    .filter(Boolean)
+    .slice(0,10);
+  const result={
+    origin:'vector',
+    timestamp:Date.now(),
+    stageWidth:bridgeState.targetStageWidth,
+    stageHeight:bridgeState.targetStageHeight,
+    layers,
+    backgroundDataUrl:exportSceneToDataUrl(1080,1440)
+  };
+  try{
+    localStorage.setItem(VECTOR_BRIDGE_RESULT_KEY,JSON.stringify(result));
+  }catch(error){
+    console.error('bridge result save failed',error);
+  }
+  window.location.href='index.html';
+}
+
 // ── Init ──
 resizeCanvas();syncPanel();syncLayers();setTool('SELECT');
 
 // demo
-setTimeout(()=>{
-  objects.push(
-    {id:uid(),type:'RECT',x:80,y:80,w:160,h:100,color:'#6c63ff',fillColor:'rgba(108,99,255,0.12)',fillMode:'both',lineWidth:2,opacity:1,visible:true,locked:false},
-    {id:uid(),type:'CIRCLE',x:360,y:160,r:60,color:'#4eca8b',fillColor:'rgba(78,202,139,0.12)',fillMode:'both',lineWidth:2,opacity:1,visible:true,locked:false},
-    {id:uid(),type:'TEXT',x:80,y:252,text:'双击编辑 · Ctrl+Z 撤销',fontSize:18,color:'#f0efff',bold:false,italic:false,opacity:1,visible:true,locked:false},
-    {id:uid(),type:'ARROW',x:100,y:320,x2:340,y2:320,color:'#ffc654',fillColor:'#ffc654',lineWidth:2,fillMode:'fill',opacity:1,visible:true,locked:false},
-  );
-  render();syncLayers();
-},60);
+const loadedFromBridge=loadFromBridge();
+if(!loadedFromBridge){
+  setTimeout(()=>{
+    objects.push(
+      {id:uid(),type:'RECT',x:80,y:80,w:160,h:100,color:'#6c63ff',fillColor:'rgba(108,99,255,0.12)',fillMode:'both',lineWidth:2,opacity:1,visible:true,locked:false},
+      {id:uid(),type:'CIRCLE',x:360,y:160,r:60,color:'#4eca8b',fillColor:'rgba(78,202,139,0.12)',fillMode:'both',lineWidth:2,opacity:1,visible:true,locked:false},
+      {id:uid(),type:'TEXT',x:80,y:252,text:'双击编辑 · Ctrl+Z 撤销',fontSize:18,color:'#f0efff',bold:false,italic:false,opacity:1,visible:true,locked:false},
+      {id:uid(),type:'ARROW',x:100,y:320,x2:340,y2:320,color:'#ffc654',fillColor:'#ffc654',lineWidth:2,fillMode:'fill',opacity:1,visible:true,locked:false},
+    );
+    render();syncLayers();
+  },60);
+}
 </script>
 </body>
 </html>
