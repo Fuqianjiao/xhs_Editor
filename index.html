@@ -1072,13 +1072,23 @@
         background: #f1f5f9;
     }
 
-    .note-cover-preview.vector-editing {
-        outline: 2px solid rgba(59, 130, 246, 0.65);
-        outline-offset: -2px;
+    .vector-edit-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 9;
+        display: none;
+        pointer-events: none;
+        border: 2px solid rgba(59, 130, 246, 0.65);
+        box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.16);
+    }
+
+    .note-cover-preview.vector-editing .vector-edit-overlay {
+        display: block;
     }
 
     #note-layer-stage {
         pointer-events: none;
+        z-index: 10;
     }
 
     .note-cover-preview.vector-editing #note-layer-stage {
@@ -1565,6 +1575,7 @@
 
                                     <div class="note-cover-preview" id="note-cover-preview">
                                         <img id="note-cover-image" alt="封面预览">
+                                        <div class="vector-edit-overlay" id="vector-edit-overlay"></div>
                                         <div class="cover-layer-stage" id="note-layer-stage"></div>
                                     </div>
                                     <div class="bg-carousel-indicator" id="note-cover-indicator"></div>
